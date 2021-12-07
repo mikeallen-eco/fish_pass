@@ -154,7 +154,7 @@ data2017 %>%
   labs(x = "", y = "") +
   theme(text = element_text(size = 15))
   
-ggsave("figures/tag_check.png", height = 7, width = 10, dpi = 400)
+# ggsave("figures/tag_check.png", height = 7, width = 10, dpi = 400)
 ```
 
 # Plot pings by tag to identify which belong to fish
@@ -167,7 +167,7 @@ data2017 %>%
   labs(x = "", y = "") +
   theme(text = element_text(size = 15))
   
-ggsave("figures/antenna_check.png", height = 7, width = 10, dpi = 400)
+# ggsave("figures/antenna_check.png", height = 7, width = 10, dpi = 400)
 ```
 
 # Extracting & summarizing fish
@@ -193,7 +193,20 @@ fish2017_sum <- fish2017 %>%
                      values_from = c(first_ping, last_ping, n)) %>%
   # add in tagging time and common name
   left_join(tags) %>%
-  select(tag_short, Common.Name, tag_time, 2:13)
+  select(tag_short, Common.Name, tag_time, 2:13) %>%
+  # calculate durations
+  # attraction time (tag_time -> min A1)
+  # staging time (min A1 -> max A1)
+  # transit time (max A1 -> max A4)
+  # passage time (sum of other 3)
+  mutate(attraction = as.duration(interval(start = tag_time,
+                                          end = first_ping_A1)),
+         staging = as.duration(interval(start = first_ping_A1,
+                                          end = last_ping_A1)),
+         transition = as.duration(interval(start = last_ping_A1,
+                                          end = last_ping_A4)),
+         passage = as.duration(interval(start = tag_time,
+                                          end = last_ping_A4)))
 
 # write csv for review
 write.csv(fish2017_sum, "output/fish2017_sum.csv", row.names = F)
@@ -207,7 +220,9 @@ passage time (sum of other 3)
 ```{r}
 
 
-
+fish2017_sum <- fish2017_sum %>%
+  mutate(attraction = as.duration(interval(start = tag_time,
+                                          end = first_ping_A1)))
 
 
 ```
