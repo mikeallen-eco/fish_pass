@@ -8,6 +8,10 @@ output: html_document
 ```{r}
 # Packages
 library(dplyr)
+library(ggplot2)
+library(stringr)
+library(wesanderson)
+library(lubridate)
 ```
 # Compile receiver data from 2017
 Type: D (data), E (information), or B (bad)
@@ -75,38 +79,85 @@ for(i in 1:length(files)){
 
 # set number of digits for seconds
 options(digits.secs=2)
+options(digits = 11)
 
 # bind all data files together and format them
 data2017 <- do.call(rbind, file_data_list) %>%
   select(file, date, time, antenna, tag, direction, flag) %>%
-  # correct 2 reading errors manually
+  # correct 2 reading errors manually from these three lines
   # 6_26_17 Down.TXT file at 2017-06-26 09:36:39.71
   # 6_26_17 Down.TXT file at 2017-06-25 21:26:28.43
+  # 6_26_17 Down.TXT file at 2017-06-24 19:11:43.60
   mutate(tag = case_when(tag == "1" ~ "000000180843403", 
                          tag == "A1" ~ "0000_0000000180843403",
+                         tag == "00šúÁ000000180843440" ~ 
+                           "0000_0000000180843440",
                          TRUE ~ tag),
          antenna = case_when(antenna %in% c("2", "4440") ~ "A1", 
                          TRUE ~ antenna)) %>%
   # delete glitch row
   # 5_15_17 Down 2.TXT 2019-03-02 17:05:43.25
   filter(antenna != "0000") %>%
-  # format date
-  mutate(date = as.Date(date),
-         datetime = strptime(paste(date, time), 
-                             format="%Y-%m-%d %H:%M:%OS")) %>%
   # remove one weird ping from 2018-06-02
-  filter(date != "2018-06-02")
+  filter(date != "2018-06-02") %>%  
+  # make shorter tag number
+  mutate(tag_short = str_sub(tag, - 9, - 1)) %>%
+  # format date and time
+  mutate(date = as.Date(date),
+         # datetime = strptime(paste(date, time), 
+         #                     format="%Y-%m-%d %H:%M:%OS"),
+         datetime = ymd_hms(paste(date, time), tz = "America/New_York"))
+  
+
+# # saving this in case I need it later
+#   mutate(year = year(datetime2),
+#          ord = yday(datetime2),
+#          hour = hour(datetime2),
+#          min = minute(datetime2),
+#          sec = second(datetime2),
+#          dhour = year + (ord + (hour + (min + sec/60)/60)/24)/
+#          )
 
 # check for antenna naming issues
 unique(data2017$flag)
+unique(data2017$tag)
+unique(data2017$tag_short)
 
 # subset final columns
 data2017 <- data2017 %>%
-  select(file, date, time, datetime, antenna, tag) %>%
+  select(file, date, time, datetime, antenna, tag, tag_short) %>%
   arrange(antenna, tag, datetime)
+
+# rm(file_data_list)
 ```
 # Export 2017 data for inspection
 ```{r}
 write.csv(data2017, "output/2017_clean_detection_data.csv", row.names=F)
 ```
+# Plot pings by tag to identify which belong to fish
+```{r}
+data2017 %>%
+  ggplot() +
+  geom_point(aes(x = datetime, y = as.factor(tag_short), color = antenna),
+             alpha = .8, pch = 1) +
+  scale_color_manual(values = c(wes_palettes$FantasticFox1[1:3],
+                                "firebrick")) +
+  theme_bw() +
+  labs(x = "", y = "") +
+  theme(text = element_text(size = 15))
+  
+ggsave("figures/tag_check.png", height = 7, width = 10, dpi = 400)
+```
 
+# Plot pings by tag to identify which belong to fish
+```{r}
+data2017 %>%
+  ggplot() +
+  geom_point(aes(x = datetime, y = as.factor(antenna)),
+             alpha = .5, pch = 1) +
+  theme_bw() +
+  labs(x = "", y = "") +
+  theme(text = element_text(size = 15))
+  
+ggsave("figures/antenna_check.png", height = 7, width = 10, dpi = 400)
+```
