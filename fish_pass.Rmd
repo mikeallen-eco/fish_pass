@@ -1,0 +1,112 @@
+---
+title: "fish_pass"
+author: "Mike Allen"
+date: "12/7/2021"
+output: html_document
+---
+
+```{r}
+# Packages
+library(dplyr)
+```
+# Compile receiver data from 2017
+Type: D (data), E (information), or B (bad)
+Date: MM/DD/YYYY
+Time: HH:MM:SS.SS
+Unknown1: HH:MM:SS.SS?
+Unknown2: HA, HR, or HW
+Tag: 27 long values
+Antenna: A1, A3, A4 (and "1")
+Unknown3: 1-25, 27-29, 31, 34-36, 38, 4454
+Unknown4: 871 values
+```{r}
+# List of files to read
+datadir <- "data/receiver_files/2017"
+files <- list.files(datadir)
+
+# create empty list to contain formated data
+file_data_list <- list()
+
+# Loop through files and format data
+for(i in 1:length(files)){
+  # Read data
+  filename <- files[i]
+  print(paste(i, filename))
+  filepath <- paste(datadir, filename, sep="/")
+  data_all <- read.table(filepath, col.names=c("type", "date", "time",
+                                               "unknown1", "unknown2", 
+                                               "tag", "antenna", 
+                                               "unknown3", "unknown4",
+                                           paste("extra", 1:5, sep="")),
+                         fill=T, as.is=T, na.strings="") %>%
+  # Type: D (data) or E (error/info) or B (bad - only one file)
+    filter(type == "D")
+
+  # Only do the following if there is data
+  if(nrow(data_all)>0){
+  
+    # Up or down file?
+    data <- data_all %>%
+      mutate(direction = case_when(grepl("up|Up|UP", 
+                                         filename) ~ "up",
+                                   grepl("down|Down|DOWN", 
+                                         filename) ~ "down",
+                                   TRUE ~ "direction unknown"),
+             # flag antenna names that don't match expectations
+             flag = case_when(direction == "up" & 
+                                antenna %in% c("A1", "A2") ~ "mismatch",
+                              direction == "down" & 
+                                antenna %in% c("A3", "A4") ~ "mismatch",
+                              TRUE ~ "OK"),
+             file = filename)
+    
+    # Rename antennas if necessary (old - check on this)
+    # Up: A1 becomes A4; A3 stays the same
+    # Down: A3 becomes A2; A1 stays the same
+    # if(direction=="up"){data$antenna[data$antenna=="A1"] <- "A4"}
+    # if(direction=="down"){data$antenna[data$antenna=="A3"] <- "A2"}
+
+   # Merge datasets
+    file_data_list[[i]] <- data
+    
+  }
+  
+}
+
+# set number of digits for seconds
+options(digits.secs=2)
+
+# bind all data files together and format them
+data2017 <- do.call(rbind, file_data_list) %>%
+  select(file, date, time, antenna, tag, direction, flag) %>%
+  # correct 2 reading errors manually
+  # 6_26_17 Down.TXT file at 2017-06-26 09:36:39.71
+  # 6_26_17 Down.TXT file at 2017-06-25 21:26:28.43
+  mutate(tag = case_when(tag == "1" ~ "000000180843403", 
+                         tag == "A1" ~ "0000_0000000180843403",
+                         TRUE ~ tag),
+         antenna = case_when(antenna %in% c("2", "4440") ~ "A1", 
+                         TRUE ~ antenna)) %>%
+  # delete glitch row
+  # 5_15_17 Down 2.TXT 2019-03-02 17:05:43.25
+  filter(antenna != "0000") %>%
+  # format date
+  mutate(date = as.Date(date),
+         datetime = strptime(paste(date, time), 
+                             format="%Y-%m-%d %H:%M:%OS")) %>%
+  # remove one weird ping from 2018-06-02
+  filter(date != "2018-06-02")
+
+# check for antenna naming issues
+unique(data2017$flag)
+
+# subset final columns
+data2017 <- data2017 %>%
+  select(file, date, time, datetime, antenna, tag) %>%
+  arrange(antenna, tag, datetime)
+```
+# Export 2017 data for inspection
+```{r}
+write.csv(data2017, "output/2017_clean_detection_data.csv", row.names=F)
+```
+
