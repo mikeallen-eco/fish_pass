@@ -1,0 +1,12 @@
+up
+upload #31 start: 07/16/2012 09:33:21.59
+Site code: JUL
+--------- upload 31 start ---------
+07/16/2012 09:33:21.59 upload 30 complete
+07/16/2012 09:34:42.31 datalogger mode selected
+07/19/2012 12:20:22.47 supply power ok 13.6V
+07/19/2012 12:20:22.47 database file opened
+07/19/2012 12:20:22.47 starting reader after power up
+--------- upload 31 done ---------
+
+>

@@ -1,0 +1,10 @@
+up
+Upload #2
+Reader: Noname  Site: AA
+--------- upload 2 start ---------
+E 2017-03-01 09:14:27.34 upload 1 complete
+D 2017-03-01 09:15:36.05 00:00:00.00 HR 0000_0000000180598569 A1    1   663
+--------- upload 2 done ---------
+2 records
+
+>

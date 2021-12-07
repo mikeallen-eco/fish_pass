@@ -1,0 +1,54 @@
+
+
+Oregon RFID Datalogger Version 3.99  
+Datalogger functions
+ UP upload detection records
+ UH show upload history
+ UT upload time records
+TagTracker functions
+ EX export TagTracker database
+ IM import TagTracker database
+Reader configuration
+ DT set date and time
+ FR factory reset datalogger and reader
+ ON set automatic on/off times
+ CG change reader settings
+ MX enter mux sequence
+ MV set minimum voltage before shutdown
+ DM select detection messages to display
+ CO enter comment to log file
+Performance monitor
+ SS show scans per second and pulse timings
+ AD show reader voltages, amperages
+ AV calibrate analog voltage
+ RT read board temperature
+ WR write tag id
+
+>ad
+                           supply                 supply     clock
+                            amps                   volts     volts
+Rx 0.20 Tx A1 1.18 A2 1.08                 EA 0.66   12.4 V     3.3 V   08:27:27.78
+Rx 0.21 Tx A1 1.16 A2 1.12                 EA 0.67   12.4 V     3.3 V   08:27:28.29
+Rx 0.21 Tx A1 1.18 A2 1.11                 EA 0.66   12.4 V     3.3 V   08:27:28.80
+Rx 0.21 Tx A1 1.18 A2 1.13                 EA 0.67   12.5 V     3.3 V   08:27:29.32
+Rx 0.25 Tx A1 1.18 A2 1.13                 EA 0.69   12.4 V     3.3 V   08:27:29.83
+Rx 0.22 Tx A1 1.12 A2 1.12                 EA 0.67   12.4 V     3.3 V   08:27:30.35
+Rx 0.21 Tx A1 1.17 A2 1.07                 EA 0.67   12.4 V     3.3 V   08:27:30.86
+
+>up
+upload #21 start: 06/25/2013 08:26:16.97
+Site code: AA
+--------- upload 21 start ---------
+06/25/2013 08:26:16.97 upload 20 complete
+06/25/2013 08:27:23.34  00:00:00.09 R 0000_0000000180843403 A1    2  2308
+--------- upload 21 done ---------
+
+>Kick start -- not scanning
+up
+upload #22 start: 06/25/2013 08:27:33.72
+Site code: AA
+--------- upload 22 start ---------
+06/25/2013 08:27:33.72 upload 21 complete
+06/25/2013 08:28:09.04  00:00:00.52 A 00000 0 900 226000011001 A1    7   547
+06/25/2013 08:28:10.26 Kick start -- not scanning
+06/25/2013 08:28:11.35  00:00:01.15 A 00000 0 900 226
