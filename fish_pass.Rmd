@@ -129,6 +129,14 @@ data2017 <- data2017 %>%
   arrange(antenna, tag, datetime)
 
 # rm(file_data_list)
+
+# read in tagging data
+tags <- read.csv("other/tagging_data_11_2_21.csv") %>%
+  filter(Tag.Number != "No Tag Number",
+         Tag.Number != "-") %>%
+  mutate(tag_short = str_sub(Tag.Number, - 9, - 1),
+         tag_time = mdy_hm(Date.and.Time, tz = "America/New_York"))
+
 ```
 # Export 2017 data for inspection
 ```{r}
@@ -161,3 +169,46 @@ data2017 %>%
   
 ggsave("figures/antenna_check.png", height = 7, width = 10, dpi = 400)
 ```
+
+# Extracting & summarizing fish
+```{r}
+# extract data only from fish tags
+fish2017 <- data2017 %>%
+  filter(tag_short %in% c("181177668", "000093631",
+                          "000093630", "000093628",
+                          "000093624", "000093600", "000093602",
+                          "000093603", "000093604", 
+                          "000093605", "000093606",
+                          "000008917", "000008918")) %>%
+  arrange(tag_short, datetime)
+
+# summarize data by antenna and fish
+fish2017_sum <- fish2017 %>%
+  group_by(tag_short, antenna) %>%
+  summarize(first_ping = min(datetime),
+            last_ping = max(datetime),
+            n = length(datetime),
+            .groups = "drop") %>% 
+  tidyr::pivot_wider(names_from = antenna, 
+                     values_from = c(first_ping, last_ping, n)) %>%
+  # add in tagging time and common name
+  left_join(tags) %>%
+  select(tag_short, Common.Name, tag_time, 2:13)
+
+# write csv for review
+write.csv(fish2017_sum, "output/fish2017_sum.csv", row.names = F)
+
+```
+# calculate times
+attraction time (tag_time -> min A1)
+staging time (min A1 -> max A1)
+transit time (max A1 -> max A4)
+passage time (sum of other 3)
+```{r}
+
+
+
+
+
+```
+
