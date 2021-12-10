@@ -4,7 +4,32 @@ author: "Mike Allen"
 date: "12/7/2021"
 output: html_document
 ---
+# Packages
+Load packages, functions, and tagging data
+```{r}
+library(dplyr)
+library(ggplot2)
+library(stringr)
+library(wesanderson)
+library(lubridate)
+source("scripts/plot_by_tag_function.R")
+source("scripts/plot_by_antenna_function.R")
+source("scripts/fishsum_function.R")
 
+# read in tagging data
+tags <- read.csv("other/tagging_data_11_2_21.csv") %>%
+  filter(Tag.Number != "No Tag Number",
+         Tag.Number != "-") %>%
+  mutate(tag_short = str_sub(Tag.Number, - 9, - 1),
+         tag_time = mdy_hm(Date.and.Time, tz = "America/New_York"))
+```
+# Compile receiver data
+```{r}
+source("scripts/compile_pings_2017.R")
+source("scripts/compile_pings_2018.R")
+source("scripts/compile_pings_2019.R")
+```
+# Compile receiver data from 2016
 ```{r}
 # Packages
 library(dplyr)
@@ -12,20 +37,10 @@ library(ggplot2)
 library(stringr)
 library(wesanderson)
 library(lubridate)
-```
-# Compile receiver data from 2017
-Type: D (data), E (information), or B (bad)
-Date: MM/DD/YYYY
-Time: HH:MM:SS.SS
-Unknown1: HH:MM:SS.SS?
-Unknown2: HA, HR, or HW
-Tag: 27 long values
-Antenna: A1, A3, A4 (and "1")
-Unknown3: 1-25, 27-29, 31, 34-36, 38, 4454
-Unknown4: 871 values
-```{r}
+library(here)
+
 # List of files to read
-datadir <- "data/receiver_files/2017"
+datadir <- here::here("data", "receiver_files", "2016")
 files <- list.files(datadir)
 
 # create empty list to contain formated data
@@ -70,11 +85,21 @@ for(i in 1:length(files)){
     # if(direction=="up"){data$antenna[data$antenna=="A1"] <- "A4"}
     # if(direction=="down"){data$antenna[data$antenna=="A3"] <- "A2"}
 
-   # Merge datasets
+   # put dataset into list
     file_data_list[[i]] <- data
     
   }
-  
+  # make blank row if dataset contains no data
+  if(nrow(data_all)==0){
+    data <- data.frame(type = NA, date = "2016-01-01", 
+                       time = "12:00:00.00", unknown1 = NA,
+                       unknown2 = NA, tag = NA, antenna = NA, unknown3 = NA,
+                       unknown4 = NA, extra1 = NA, extra2 = NA, extra3 = NA,
+                       extra4 = NA, extra5 = NA, direction = NA, flag = "empty",
+                       file = filename)
+   # put dataset into list
+  file_data_list[[i]] <- data
+  }
 }
 
 # set number of digits for seconds
@@ -82,160 +107,90 @@ options(digits.secs=2)
 options(digits = 11)
 
 # bind all data files together and format them
-data2017 <- do.call(rbind, file_data_list) %>%
+data2016 <- do.call(rbind, file_data_list) %>%
   select(file, date, time, antenna, tag, direction, flag) %>%
-  # correct 2 reading errors manually from these three lines
-  # 6_26_17 Down.TXT file at 2017-06-26 09:36:39.71
-  # 6_26_17 Down.TXT file at 2017-06-25 21:26:28.43
-  # 6_26_17 Down.TXT file at 2017-06-24 19:11:43.60
-  mutate(tag = case_when(tag == "1" ~ "000000180843403", 
-                         tag == "A1" ~ "0000_0000000180843403",
-                         tag == "00šúÁ000000180843440" ~ 
-                           "0000_0000000180843440",
-                         TRUE ~ tag),
-         antenna = case_when(antenna %in% c("2", "4440") ~ "A1", 
-                         TRUE ~ antenna)) %>%
-  # delete glitch row
-  # 5_15_17 Down 2.TXT 2019-03-02 17:05:43.25
-  filter(antenna != "0000") %>%
-  # remove one weird ping from 2018-06-02
-  filter(date != "2018-06-02") %>%  
   # make shorter tag number
   mutate(tag_short = str_sub(tag, - 9, - 1)) %>%
   # format date and time
   mutate(date = as.Date(date),
-         # datetime = strptime(paste(date, time), 
-         #                     format="%Y-%m-%d %H:%M:%OS"),
-         datetime = ymd_hms(paste(date, time), tz = "America/New_York"))
-  
+         datetime = ymd_hms(paste(date, time), tz = "America/New_York")) %>%
+# remove one empty data file: 07_01_16 down.TXT
+# and one ping from 2032: 06_01_16 up.TXT 2032-09-12 05:14:27.00
+# and one ping with no antenna identity: 05_20_16 up.TXT 2016-05-18 19:09:22.45
+  filter(flag != "empty",
+         date != "2032-09-12",
+         antenna != "1") %>%
+  # rename antennas as needed (see Issue #5 on github.com/mikeallen-eco/fish_pass.git)
+mutate(antenna = case_when(antenna == "A1" & direction == "down" ~ "A1",
+                            antenna == "A1" & direction == "up" ~ "A3",
+                            antenna == "A3" & direction == "down" ~ "A2",
+                            antenna == "A3" & direction == "up" ~ "A4",
+                            antenna == "A4" ~ "A4",
+                            TRUE ~ "unknown"))
 
-# # saving this in case I need it later
-#   mutate(year = year(datetime2),
-#          ord = yday(datetime2),
-#          hour = hour(datetime2),
-#          min = minute(datetime2),
-#          sec = second(datetime2),
-#          dhour = year + (ord + (hour + (min + sec/60)/60)/24)/
-#          )
-
-# check for antenna naming issues
-unique(data2017$flag)
-unique(data2017$tag)
-unique(data2017$tag_short)
+# check for antenna naming issues, etc.
+unique(data2016$flag)
+unique(data2016$tag)
+unique(data2016$tag_short)
+unique(data2016$date)
+hist(yday(data2016$date))
+table(data2016$direction)
+table(year(data2016$date))
 
 # subset final columns
-data2017 <- data2017 %>%
-  select(file, date, time, datetime, antenna, tag, tag_short) %>%
-  arrange(antenna, tag, datetime)
+data2016 <- data2016 %>%
+  select(file, date, time, datetime, direction, antenna, tag, tag_short) %>%
+  arrange(datetime)
 
-# rm(file_data_list)
-
-# read in tagging data
-tags <- read.csv("other/tagging_data_11_2_21.csv") %>%
-  filter(Tag.Number != "No Tag Number",
-         Tag.Number != "-") %>%
-  mutate(tag_short = str_sub(Tag.Number, - 9, - 1),
-         tag_time = mdy_hm(Date.and.Time, tz = "America/New_York"))
-
+rm(file_data_list, data, data_all, datadir, filename, filepath, files, i)
 ```
-# Export 2017 data for inspection
+# Export cleaned, compiled data for inspection
 ```{r}
-write.csv(data2017, "output/2017_clean_detection_data.csv", row.names=F)
+write.csv(data2016, 
+          "output/2016_clean_detection_data.csv", row.names=F)
+write.csv(data2017, 
+          "output/2017_clean_detection_data.csv", row.names=F)
+write.csv(data2018, 
+          "output/2018_clean_detection_data.csv", row.names=F)
+write.csv(data2019, 
+          "output/2019_clean_detection_data.csv", row.names=F)
 ```
 # Plot pings by tag to identify which belong to fish
 ```{r}
-data2017 %>%
-  ggplot() +
-  geom_point(aes(x = datetime, y = as.factor(tag_short), color = antenna),
-             alpha = .8, pch = 1) +
-  scale_color_manual(values = c(wes_palettes$FantasticFox1[1:3],
-                                "firebrick")) +
-  theme_bw() +
-  labs(x = "", y = "") +
-  theme(text = element_text(size = 15))
-  
-# ggsave("figures/tag_check.png", height = 7, width = 10, dpi = 400)
+# plot pings by tag number to check and identify fish
+plot_by_tag(data2016)
+plot_by_tag(data2017)
+plot_by_tag(data2018)
+plot_by_tag(data2019)
 ```
-
 # Plot pings by tag to identify which belong to fish
 ```{r}
-data2017 %>%
-  ggplot() +
-  geom_point(aes(x = datetime, y = as.factor(antenna)),
-             alpha = .5, pch = 1) +
-  theme_bw() +
-  labs(x = "", y = "") +
-  theme(text = element_text(size = 15))
-  
-# ggsave("figures/antenna_check.png", height = 7, width = 10, dpi = 400)
+plot_by_antenna(data2016)
+plot_by_antenna(data2017)
+plot_by_antenna(data2018)
+plot_by_antenna(data2019)
 ```
 
-# Extracting & summarizing fish
+# Extracting & summarizing fish data
+extract and summarize data from fish tags
 ```{r}
-# extract data only from fish tags
-fish2017 <- data2017 %>%
-  filter(tag_short %in% c("181177668", "000093631",
-                          "000093630", "000093628",
-                          "000093624", "000093600", "000093602",
-                          "000093603", "000093604", 
-                          "000093605", "000093606",
-                          "000008917", "000008918")) %>%
-  arrange(tag_short, datetime)
-
-# summarize data by antenna and fish
-fish2017_sum <- fish2017 %>%
-  group_by(tag_short, antenna) %>%
-  summarize(
-    first_ping = min(datetime),
-    last_ping = max(datetime),
-    n = length(datetime),
-    .groups = "drop"
-  ) %>%
-  tidyr::pivot_wider(names_from = antenna,
-                     values_from = c(first_ping, last_ping, n)) %>%
-  # add in tagging time and common name
-  left_join(tags) %>%
-  select(tag_short, Common.Name, tag_time, 2:13) %>%
-  # calculate durations
-  # attraction time (tag_time -> min A1)
-  # staging time (min A1 -> max A1)
-  # transit time (max A1 -> max A4)
-  # passage time (sum of other 3)
-  mutate(
-    attraction.days = as.numeric(as.duration(
-      interval(start = tag_time,
-               end = first_ping_A1)
-    )) / (3600 * 24),
-    staging.days =
-      as.numeric(as.duration(
-        interval(start = first_ping_A1,
-                 end = last_ping_A1)
-      )) / (3600 * 24),
-    transition.days = as.numeric(as.duration(
-      interval(start = last_ping_A1,
-               end = last_ping_A4)
-    )) / (3600 * 24),
-    passage.days = as.numeric(as.duration(
-      interval(start = tag_time,
-               end = last_ping_A4)
-    )) / (3600 * 24)
-  )
-
-# write csv for review
+fish2016_sum <- fishsum(data2016)
+fish2017_sum <- fishsum(data2017)
+fish2018_sum <- fishsum(data2018)
+fish2019_sum <- fishsum(data2019)
+  
+```
+# write fish summary csv files for review
+```{r}
+write.csv(fish2016_sum, "output/fish2016_sum.csv", row.names = F)
 write.csv(fish2017_sum, "output/fish2017_sum.csv", row.names = F)
+write.csv(fish2018_sum, "output/fish2018_sum.csv", row.names = F)
+write.csv(fish2019_sum, "output/fish2019_sum.csv", row.names = F)
 
 ```
-# calculate times
-attraction time (tag_time -> min A1)
-staging time (min A1 -> max A1)
-transit time (max A1 -> max A4)
-passage time (sum of other 3)
+# analysis
 ```{r}
 
-
-fish2017_sum <- fish2017_sum %>%
-  mutate(attraction = as.duration(interval(start = tag_time,
-                                          end = first_ping_A1)))
 
 
 ```
