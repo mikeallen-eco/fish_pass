@@ -25,22 +25,23 @@ tags <- read.csv("other/tagging_data_11_2_21.csv") %>%
 ```
 # Compile receiver data
 ```{r}
+source("scripts/compile_pings_2015.R")
+source("scripts/compile_pings_2016.R")
 source("scripts/compile_pings_2017.R")
 source("scripts/compile_pings_2018.R")
 source("scripts/compile_pings_2019.R")
 ```
-# Compile receiver data from 2016
+# Compile receiver data from 2014
 ```{r}
 # Packages
 library(dplyr)
 library(ggplot2)
 library(stringr)
-library(wesanderson)
 library(lubridate)
 library(here)
 
 # List of files to read
-datadir <- here::here("data", "receiver_files", "2016")
+datadir <- here::here("data", "receiver_files", "2014")
 files <- list.files(datadir)
 
 # create empty list to contain formated data
@@ -91,7 +92,7 @@ for(i in 1:length(files)){
   }
   # make blank row if dataset contains no data
   if(nrow(data_all)==0){
-    data <- data.frame(type = NA, date = "2016-01-01", 
+    data <- data.frame(type = NA, date = "2015-01-01", 
                        time = "12:00:00.00", unknown1 = NA,
                        unknown2 = NA, tag = NA, antenna = NA, unknown3 = NA,
                        unknown4 = NA, extra1 = NA, extra2 = NA, extra3 = NA,
@@ -107,45 +108,46 @@ options(digits.secs=2)
 options(digits = 11)
 
 # bind all data files together and format them
-data2016 <- do.call(rbind, file_data_list) %>%
+data2014 <- do.call(rbind, file_data_list) %>%
   select(file, date, time, antenna, tag, direction, flag) %>%
   # make shorter tag number
   mutate(tag_short = str_sub(tag, - 9, - 1)) %>%
+  # remove weird record from 05_12_14.TXT 2019-01-08 V8:43:79.39
+  filter(time != "V8:43:79.39") %>%
   # format date and time
   mutate(date = as.Date(date),
          datetime = ymd_hms(paste(date, time), tz = "America/New_York")) %>%
-# remove one empty data file: 07_01_16 down.TXT
-# and one ping from 2032: 06_01_16 up.TXT 2032-09-12 05:14:27.00
-# and one ping with no antenna identity: 05_20_16 up.TXT 2016-05-18 19:09:22.45
-  filter(flag != "empty",
-         date != "2032-09-12",
-         antenna != "1") %>%
-  # rename antennas as needed (see Issue #5 on github.com/mikeallen-eco/fish_pass.git)
-mutate(antenna = case_when(antenna == "A1" & direction == "down" ~ "A1",
-                            antenna == "A1" & direction == "up" ~ "A3",
-                            antenna == "A3" & direction == "down" ~ "A2",
-                            antenna == "A3" & direction == "up" ~ "A4",
-                            antenna == "A4" ~ "A4",
+  # rename antennas as needed (see Issue #5 on github.com/mikeallen-eco/fish_pass)
+  # 2014: A1= A2, A4=A1, this year we used one receiver box for the most part, so let's assume A1= A2, A4=A1 for now, but then it switched to two: if latter file name has A1, assume it's the receiver for A1 (update to A4), if file name has A2, assume it's updated antenna A1.
+mutate(
+  antenna_original = antenna,
+  antenna = case_when(antenna == "A2" ~ "A1",
+                            antenna == "A1" ~ "A4",
                             TRUE ~ "unknown"))
 
 # check for antenna naming issues, etc.
-unique(data2016$flag)
-unique(data2016$tag)
-unique(data2016$tag_short)
-unique(data2016$date)
-hist(yday(data2016$date))
-table(data2016$direction)
-table(year(data2016$date))
+unique(data2014$antenna)
+unique(data2014$antenna_original)
+
+unique(data2014$tag)
+unique(data2014$tag_short)
+unique(data2015$date)
+hist(yday(data2015$date))
+table(data2015$direction)
+table(year(data2015$date))
 
 # subset final columns
-data2016 <- data2016 %>%
+data2015 <- data2015 %>%
   select(file, date, time, datetime, direction, antenna, tag, tag_short) %>%
-  arrange(datetime)
+  arrange(datetime) %>%
+  mutate(year = "2015")
 
 rm(file_data_list, data, data_all, datadir, filename, filepath, files, i)
 ```
 # Export cleaned, compiled data for inspection
 ```{r}
+write.csv(data2015, 
+          "output/2015_clean_detection_data.csv", row.names=F)
 write.csv(data2016, 
           "output/2016_clean_detection_data.csv", row.names=F)
 write.csv(data2017, 
@@ -158,6 +160,7 @@ write.csv(data2019,
 # Plot pings by tag to identify which belong to fish
 ```{r}
 # plot pings by tag number to check and identify fish
+plot_by_tag(data2015)
 plot_by_tag(data2016)
 plot_by_tag(data2017)
 plot_by_tag(data2018)
@@ -165,23 +168,24 @@ plot_by_tag(data2019)
 ```
 # Plot pings by tag to identify which belong to fish
 ```{r}
+plot_by_antenna(data2015)
 plot_by_antenna(data2016)
 plot_by_antenna(data2017)
 plot_by_antenna(data2018)
 plot_by_antenna(data2019)
 ```
-
 # Extracting & summarizing fish data
 extract and summarize data from fish tags
 ```{r}
+fish2015_sum <- fishsum(data2015)
 fish2016_sum <- fishsum(data2016)
 fish2017_sum <- fishsum(data2017)
 fish2018_sum <- fishsum(data2018)
 fish2019_sum <- fishsum(data2019)
-  
 ```
 # write fish summary csv files for review
 ```{r}
+write.csv(fish2016_sum, "output/fish2015_sum.csv", row.names = F)
 write.csv(fish2016_sum, "output/fish2016_sum.csv", row.names = F)
 write.csv(fish2017_sum, "output/fish2017_sum.csv", row.names = F)
 write.csv(fish2018_sum, "output/fish2018_sum.csv", row.names = F)

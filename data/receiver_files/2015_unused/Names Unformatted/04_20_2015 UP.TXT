@@ -1,0 +1,24 @@
+
+
+>up
+Upload #22
+Reader: Noname  Site: AA
+--------- upload 22 start ---------
+E 2015-04-16 16:31:27.35 upload 21 complete
+E 2015-04-16 16:34:04.61 supply power ok 11.9V
+E 2015-04-16 16:34:04.61 database file opened
+E 2015-04-16 16:34:04.61 starting reader after power up
+D 2015-04-16 16:34:20.67 00:00:03.23 HR 0000_0000000181177679 A3   17    48
+D 2015-04-16 16:34:31.86 00:00:00.41 HR 0000_0000000181177679 A1    3   105
+D 2015-04-16 16:34:35.49 00:00:00.40 HR 0000_0000000181177679 A1    3    15
+D 2015-04-16 16:34:51.62 00:00:00.60 HA      900_226000080312 A1    4    77
+E 2015-04-16 16:35:47.69 supply power ok 12.1V
+E 2015-04-16 16:35:47.69 database file opened
+E 2015-04-16 16:35:47.69 starting reader after power up
+E 2015-04-20 19:00:13.52 supply power ok 11.9V
+E 2015-04-20 19:00:13.52 database file opened
+E 2015-04-20 19:00:13.52 starting reader after power up
+--------- upload 22 done ---------
+14 records
+
+>

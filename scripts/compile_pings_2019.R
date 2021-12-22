@@ -82,7 +82,8 @@ table(data2019$direction)
 
 # subset final columns
 data2019 <- data2019 %>%
-  select(file, date, time, datetime, antenna, tag, tag_short) %>%
-  arrange(datetime)
+  select(file, date, time, datetime, direction, antenna, tag, tag_short) %>%
+  arrange(datetime) %>%
+  mutate(year = "2019")
 
 rm(file_data_list, data, data_all, datadir, filename, filepath, files, i)

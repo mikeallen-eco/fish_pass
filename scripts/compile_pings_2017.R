@@ -100,7 +100,7 @@ table(data2017$direction)
 
 # subset final columns
 data2017 <- data2017 %>%
-  select(file, date, time, datetime, antenna, tag, tag_short) %>%
+  select(file, date, time, datetime, direction, antenna, tag, tag_short) %>%
   arrange(datetime) %>%
   mutate(year = "2017")
 
