@@ -185,7 +185,7 @@ fish2019_sum <- fishsum(data2019)
 ```
 # write fish summary csv files for review
 ```{r}
-write.csv(fish2016_sum, "output/fish2015_sum.csv", row.names = F)
+write.csv(fish2015_sum, "output/fish2015_sum.csv", row.names = F)
 write.csv(fish2016_sum, "output/fish2016_sum.csv", row.names = F)
 write.csv(fish2017_sum, "output/fish2017_sum.csv", row.names = F)
 write.csv(fish2018_sum, "output/fish2018_sum.csv", row.names = F)
