@@ -32,7 +32,7 @@ source("scripts/compile_pings_2017.R")
 source("scripts/compile_pings_2018.R")
 source("scripts/compile_pings_2019.R")
 ```
-# Compile receiver data from 2014
+# Compile receiver data from 2013
 ```{r}
 # Packages
 library(dplyr)
@@ -42,7 +42,7 @@ library(lubridate)
 library(here)
 
 # List of files to read
-datadir <- here::here("data", "receiver_files", "2014")
+datadir <- here::here("data", "receiver_files", "2013")
 files <- list.files(datadir)
 
 # create empty list to contain formated data
@@ -54,50 +54,33 @@ for(i in 1:length(files)){
   filename <- files[i]
   print(paste(i, filename))
   filepath <- paste(datadir, filename, sep="/")
-  data_all <- read.table(filepath, col.names=c("type", "date", "time",
-                                               "unknown1", "unknown2", 
-                                               "tag", "antenna", 
+  data_all <- read.table(filepath, col.names=c("date", "time",
+                                               "unknown1", "type", "unknown2", 
                                                "unknown3", "unknown4",
+                                               "tag", "antenna", 
                                            paste("extra", 1:5, sep="")),
-                         fill=T, as.is=T, na.strings="") %>%
+                         fill=T, as.is=T, na.strings="") #%>%
   # Type: D (data) or E (error/info) or B (bad - only one file)
-    filter(type == "D")
+    #filter(type == "D")
 
   # Only do the following if there is data
   if(nrow(data_all)>0){
   
     # Up or down file?
     data <- data_all %>%
-      mutate(direction = case_when(grepl("up|Up|UP", 
-                                         filename) ~ "up",
-                                   grepl("down|Down|DOWN", 
-                                         filename) ~ "down",
-                                   TRUE ~ "direction unknown"),
-             # flag antenna names that don't match expectations
-             flag = case_when(direction == "up" & 
-                                antenna %in% c("A1", "A2") ~ "mismatch",
-                              direction == "down" & 
-                                antenna %in% c("A3", "A4") ~ "mismatch",
-                              TRUE ~ "OK"),
-             file = filename)
+      mutate(file = filename)
     
-    # Rename antennas if necessary (old - check on this)
-    # Up: A1 becomes A4; A3 stays the same
-    # Down: A3 becomes A2; A1 stays the same
-    # if(direction=="up"){data$antenna[data$antenna=="A1"] <- "A4"}
-    # if(direction=="down"){data$antenna[data$antenna=="A3"] <- "A2"}
-
    # put dataset into list
     file_data_list[[i]] <- data
     
   }
   # make blank row if dataset contains no data
   if(nrow(data_all)==0){
-    data <- data.frame(type = NA, date = "2015-01-01", 
-                       time = "12:00:00.00", unknown1 = NA,
-                       unknown2 = NA, tag = NA, antenna = NA, unknown3 = NA,
-                       unknown4 = NA, extra1 = NA, extra2 = NA, extra3 = NA,
-                       extra4 = NA, extra5 = NA, direction = NA, flag = "empty",
+    data <- data.frame(date = "2015-01-01", 
+                       time = "12:00:00.00", unknown1 = NA, type = NA, 
+                       unknown2 = NA, unknown3 = NA, unknown4 = NA, tag = NA, 
+                       antenna = NA, extra1 = NA, extra2 = NA, extra3 = NA,
+                       extra4 = NA, extra5 = NA,
                        file = filename)
    # put dataset into list
   file_data_list[[i]] <- data
@@ -109,83 +92,65 @@ options(digits.secs=2)
 options(digits = 11)
 
 # bind all data files together and format them
-data2014 <- do.call(rbind, file_data_list) %>%
-  select(file, date, time, antenna, tag, direction, flag) %>%
+# First do the pings labeled "A"
+data2013A <- do.call(rbind, file_data_list) %>%
+  select(file, date, time, antenna, tag, direction = type, flag = type) %>%
+  # subset just pings labeled A
+  filter(flag == "A") 
+
+# Next do the pings labeled "R"
+data2013R <- do.call(rbind, file_data_list) %>%
+  select(file, date, time, antenna = unknown3, tag = unknown2, 
+         direction = type, flag = type) %>%
+  # subset just pings labeled R
+  filter(flag == "R")
+
+# combine A and R pings
+data2013 <- data2013A %>%
+  bind_rows(data2013R) %>%
   # make shorter tag number
   mutate(tag_short = str_sub(tag, - 9, - 1)) %>%
-  # remove weird record from 05_12_14.TXT 2019-01-08 V8:43:79.39
-  filter(time != "V8:43:79.39") %>%
   # format date and time
-  mutate(date = as.Date(date),
-         datetime = ymd_hms(paste(date, time), tz = "America/New_York")) %>%
+  mutate(datetime = mdy_hms(paste(date, time), tz = "America/New_York"),
+         date = mdy(date)) %>%
   # rename antennas as needed (see Issue #5 on github.com/mikeallen-eco/fish_pass)
-  # 2014: A1= A2, A4=A1, this year we used one receiver box for the most part, so let's assume A1= A2, A4=A1 for now, but then it switched to two: if latter file name has A1, assume it's the receiver for A1 (update to A4), if file name has A2, assume it's updated antenna A1.
-  # for now: just changing A2->A1 and A1->A4
+  # 2013: A1=A2, A4=A1, this year only 1 receiver box was run, so no up/down files
+  # there are A3 pings here, so I left them in for now
 mutate(
   antenna_original = antenna,
   antenna = case_when(antenna == "A2" ~ "A1",
-                            antenna == "A1" ~ "A4",
-                            TRUE ~ "unknown")) %>%
-  #  removing 65 pings with antenna_original == "0" due to unreadable tag #s  
-  # 04_18_14.TXT (1 ping), 04_21_14.TXT (6), 05_12_14.TXT (11), 05_13_14.TXT (1)
-  # 05_15_14.TXT (15), 05_19_14.TXT (2), 05_21_14.TXT (2), 05_26_14.TXT (4),
-  # 05_8_14.TXT (21)
+                      antenna == "A1" ~ "A4",
+                      antenna == "A3" ~ "A3",
+                      TRUE ~ "unknown")) %>%
+  # removing xx pings with tag typos (but good data on either side)
+  # 04_23_13.TXT 2013-04-03 16:08:25.46  
+  # 06_17_13.TXT 2013-06-15 11:54:15.80
+  # or with no data at all: 06_25_13.TXT 2013-06-25 08:28:11.35
   filter(antenna_original != "0") %>%
-  # removing 5 pings with tag typos (but good data on either side)
-  # 05_15_14.TXT (1 ping), 05_8_14.TXT (4)
-  filter(antenna_original != "00000") %>%
-  # removing 3 pings with tag typos (but good data on either side)
-  # 05_8_14.TXT 2014-05-02 10:27:29.24
-  # 05_8_14.TXT 2014-05-02 10:28:28.89
-  # 05_8_14.TXT 2014-05-02 10:28:38.85
-  # 05_9_14.TXT 2014-05-05 18:02:24.22
-  filter(antenna_original != "0000000067143866",
-         antenna_original != "00000000000067143866",
-         antenna_original != "L1") %>%
-  # removing 3 data files with no usable data but that caused reading errors
-  # 4/16 has no data; 6/5/14 has no D/E/B codes, 5/15 has no antenna names
-  filter(file != "04_16_14.TXT",
-         file != "06_05_14.TXT",
-         file != "05_15_14 DownStream.TXT") %>%
-  # fix 2 pings with tag number missing an underscore
-  mutate(antenna = case_when(antenna_original == "0000000178695688" ~ "A4",
-                             TRUE ~ antenna),
-         tag = case_when(antenna_original == "0000000178695688" 
-                         ~ "0000_0000000178695688",
-                             TRUE ~ tag),
-         tag_short = case_when(antenna_original == "0000000178695688" 
-                         ~ "178695688",
-                             TRUE ~ tag_short),
-         antenna_original = case_when(antenna_original == "0000000178695688" 
-                         ~ "A1",
-                             TRUE ~ antenna_original)) %>%
-  # filtering out 20 corrupt tag numbers - ultimately should be reviewed
-  # this is issue # 14 on GitHub. They all contain \'s and an L
- filter(grepl(tag_short, pattern = "L") == F) %>%
-  # remove a single record from 2017 (tag 0000_0000000180843403)
-  filter(year(date) != 2017)
-         
+  filter(is.na(antenna_original) != TRUE)
 
 # check for antenna naming issues, etc.
-unique(data2014$antenna)
-unique(data2014$antenna_original)
-unique(data2014$tag)
-unique(data2014$tag_short)
-unique(data2014$date)
-hist(yday(data2014$date))
-table(data2014$direction)
-table(year(data2014$date))
+unique(data2013$antenna)
+unique(data2013$antenna_original)
+unique(data2013$tag)
+unique(data2013$tag_short)
+unique(data2013$date)
+hist(yday(data2013$date))
+table(data2013$direction)
+table(year(data2013$date))
 
 # subset final columns
-data2014 <- data2014 %>%
+data2013 <- data2013 %>%
   select(file, date, time, datetime, direction, antenna, tag, tag_short) %>%
   arrange(datetime) %>%
-  mutate(year = "2014")
+  mutate(year = "2013")
 
 rm(file_data_list, data, data_all, datadir, filename, filepath, files, i)
 ```
 # Export cleaned, compiled data for inspection
 ```{r}
+write.csv(data2013, 
+          "output/2013_clean_detection_data.csv", row.names=F)
 write.csv(data2014, 
           "output/2014_clean_detection_data.csv", row.names=F)
 write.csv(data2015, 
@@ -202,6 +167,7 @@ write.csv(data2019,
 # Plot pings by tag to identify which belong to fish
 ```{r}
 # plot pings by tag number to check and identify fish
+plot_by_tag(data2013)
 plot_by_tag(data2014)
 plot_by_tag(data2015)
 plot_by_tag(data2016)
@@ -211,6 +177,7 @@ plot_by_tag(data2019)
 ```
 # Plot pings by tag to identify which belong to fish
 ```{r}
+plot_by_antenna(data2013)
 plot_by_antenna(data2014)
 plot_by_antenna(data2015)
 plot_by_antenna(data2016)
@@ -221,6 +188,7 @@ plot_by_antenna(data2019)
 # Extracting & summarizing fish data
 extract and summarize data from fish tags
 ```{r}
+fish2013_sum <- fishsum(data2013)
 fish2014_sum <- fishsum(data2014)
 fish2015_sum <- fishsum(data2015)
 fish2016_sum <- fishsum(data2016)
@@ -230,6 +198,7 @@ fish2019_sum <- fishsum(data2019)
 ```
 # write fish summary csv files for review
 ```{r}
+write.csv(fish2013_sum, "output/fish2013_sum.csv", row.names = F)
 write.csv(fish2014_sum, "output/fish2014_sum.csv", row.names = F)
 write.csv(fish2015_sum, "output/fish2015_sum.csv", row.names = F)
 write.csv(fish2016_sum, "output/fish2016_sum.csv", row.names = F)

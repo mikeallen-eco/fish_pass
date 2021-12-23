@@ -44,13 +44,7 @@ for(i in 1:length(files)){
                                 antenna %in% c("A3", "A4") ~ "mismatch",
                               TRUE ~ "OK"),
              file = filename)
-    
-    # Rename antennas if necessary (old - check on this)
-    # Up: A1 becomes A4; A3 stays the same
-    # Down: A3 becomes A2; A1 stays the same
-    # if(direction=="up"){data$antenna[data$antenna=="A1"] <- "A4"}
-    # if(direction=="down"){data$antenna[data$antenna=="A3"] <- "A2"}
-    
+
     # put dataset into list
     file_data_list[[i]] <- data
     
