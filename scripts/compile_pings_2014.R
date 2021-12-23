@@ -1,39 +1,3 @@
----
-title: "fish_pass"
-author: "Mike Allen"
-date: "12/7/2021"
-output: html_document
----
-# Packages
-Load packages, functions, and tagging data
-```{r}
-library(dplyr)
-library(ggplot2)
-library(stringr)
-library(wesanderson)
-library(lubridate)
-source("scripts/plot_by_tag_function.R")
-source("scripts/plot_by_antenna_function.R")
-source("scripts/fishsum_function.R")
-
-# read in tagging data
-tags <- read.csv("other/tagging_data_11_2_21.csv") %>%
-  filter(Tag.Number != "No Tag Number",
-         Tag.Number != "-") %>%
-  mutate(tag_short = str_sub(Tag.Number, - 9, - 1),
-         tag_time = mdy_hm(Date.and.Time, tz = "America/New_York"))
-```
-# Compile receiver data
-```{r}
-source("scripts/compile_pings_2014.R")
-source("scripts/compile_pings_2015.R")
-source("scripts/compile_pings_2016.R")
-source("scripts/compile_pings_2017.R")
-source("scripts/compile_pings_2018.R")
-source("scripts/compile_pings_2019.R")
-```
-# Compile receiver data from 2014
-```{r}
 # Packages
 library(dplyr)
 library(ggplot2)
@@ -58,14 +22,14 @@ for(i in 1:length(files)){
                                                "unknown1", "unknown2", 
                                                "tag", "antenna", 
                                                "unknown3", "unknown4",
-                                           paste("extra", 1:5, sep="")),
+                                               paste("extra", 1:5, sep="")),
                          fill=T, as.is=T, na.strings="") %>%
-  # Type: D (data) or E (error/info) or B (bad - only one file)
+    # Type: D (data) or E (error/info) or B (bad - only one file)
     filter(type == "D")
-
+  
   # Only do the following if there is data
   if(nrow(data_all)>0){
-  
+    
     # Up or down file?
     data <- data_all %>%
       mutate(direction = case_when(grepl("up|Up|UP", 
@@ -86,8 +50,8 @@ for(i in 1:length(files)){
     # Down: A3 becomes A2; A1 stays the same
     # if(direction=="up"){data$antenna[data$antenna=="A1"] <- "A4"}
     # if(direction=="down"){data$antenna[data$antenna=="A3"] <- "A2"}
-
-   # put dataset into list
+    
+    # put dataset into list
     file_data_list[[i]] <- data
     
   }
@@ -99,8 +63,8 @@ for(i in 1:length(files)){
                        unknown4 = NA, extra1 = NA, extra2 = NA, extra3 = NA,
                        extra4 = NA, extra5 = NA, direction = NA, flag = "empty",
                        file = filename)
-   # put dataset into list
-  file_data_list[[i]] <- data
+    # put dataset into list
+    file_data_list[[i]] <- data
   }
 }
 
@@ -121,11 +85,11 @@ data2014 <- do.call(rbind, file_data_list) %>%
   # rename antennas as needed (see Issue #5 on github.com/mikeallen-eco/fish_pass)
   # 2014: A1= A2, A4=A1, this year we used one receiver box for the most part, so let's assume A1= A2, A4=A1 for now, but then it switched to two: if latter file name has A1, assume it's the receiver for A1 (update to A4), if file name has A2, assume it's updated antenna A1.
   # for now: just changing A2->A1 and A1->A4
-mutate(
-  antenna_original = antenna,
-  antenna = case_when(antenna == "A2" ~ "A1",
-                            antenna == "A1" ~ "A4",
-                            TRUE ~ "unknown")) %>%
+  mutate(
+    antenna_original = antenna,
+    antenna = case_when(antenna == "A2" ~ "A1",
+                        antenna == "A1" ~ "A4",
+                        TRUE ~ "unknown")) %>%
   #  removing 65 pings with antenna_original == "0" due to unreadable tag #s  
   # 04_18_14.TXT (1 ping), 04_21_14.TXT (6), 05_12_14.TXT (11), 05_13_14.TXT (1)
   # 05_15_14.TXT (15), 05_19_14.TXT (2), 05_21_14.TXT (2), 05_26_14.TXT (4),
@@ -152,23 +116,24 @@ mutate(
                              TRUE ~ antenna),
          tag = case_when(antenna_original == "0000000178695688" 
                          ~ "0000_0000000178695688",
-                             TRUE ~ tag),
+                         TRUE ~ tag),
          tag_short = case_when(antenna_original == "0000000178695688" 
-                         ~ "178695688",
-                             TRUE ~ tag_short),
+                               ~ "178695688",
+                               TRUE ~ tag_short),
          antenna_original = case_when(antenna_original == "0000000178695688" 
-                         ~ "A1",
-                             TRUE ~ antenna_original)) %>%
+                                      ~ "A1",
+                                      TRUE ~ antenna_original)) %>%
   # filtering out 20 corrupt tag numbers - ultimately should be reviewed
   # this is issue # 14 on GitHub. They all contain \'s and an L
- filter(grepl(tag_short, pattern = "L") == F) %>%
+  filter(grepl(tag_short, pattern = "L") == F) %>%
   # remove a single record from 2017 (tag 0000_0000000180843403)
   filter(year(date) != 2017)
-         
+
 
 # check for antenna naming issues, etc.
 unique(data2014$antenna)
 unique(data2014$antenna_original)
+
 unique(data2014$tag)
 unique(data2014$tag_short)
 unique(data2014$date)
@@ -183,65 +148,3 @@ data2014 <- data2014 %>%
   mutate(year = "2014")
 
 rm(file_data_list, data, data_all, datadir, filename, filepath, files, i)
-```
-# Export cleaned, compiled data for inspection
-```{r}
-write.csv(data2014, 
-          "output/2014_clean_detection_data.csv", row.names=F)
-write.csv(data2015, 
-          "output/2015_clean_detection_data.csv", row.names=F)
-write.csv(data2016, 
-          "output/2016_clean_detection_data.csv", row.names=F)
-write.csv(data2017, 
-          "output/2017_clean_detection_data.csv", row.names=F)
-write.csv(data2018, 
-          "output/2018_clean_detection_data.csv", row.names=F)
-write.csv(data2019, 
-          "output/2019_clean_detection_data.csv", row.names=F)
-```
-# Plot pings by tag to identify which belong to fish
-```{r}
-# plot pings by tag number to check and identify fish
-plot_by_tag(data2014)
-plot_by_tag(data2015)
-plot_by_tag(data2016)
-plot_by_tag(data2017)
-plot_by_tag(data2018)
-plot_by_tag(data2019)
-```
-# Plot pings by tag to identify which belong to fish
-```{r}
-plot_by_antenna(data2014)
-plot_by_antenna(data2015)
-plot_by_antenna(data2016)
-plot_by_antenna(data2017)
-plot_by_antenna(data2018)
-plot_by_antenna(data2019)
-```
-# Extracting & summarizing fish data
-extract and summarize data from fish tags
-```{r}
-fish2014_sum <- fishsum(data2014)
-fish2015_sum <- fishsum(data2015)
-fish2016_sum <- fishsum(data2016)
-fish2017_sum <- fishsum(data2017)
-fish2018_sum <- fishsum(data2018)
-fish2019_sum <- fishsum(data2019)
-```
-# write fish summary csv files for review
-```{r}
-write.csv(fish2014_sum, "output/fish2014_sum.csv", row.names = F)
-write.csv(fish2015_sum, "output/fish2015_sum.csv", row.names = F)
-write.csv(fish2016_sum, "output/fish2016_sum.csv", row.names = F)
-write.csv(fish2017_sum, "output/fish2017_sum.csv", row.names = F)
-write.csv(fish2018_sum, "output/fish2018_sum.csv", row.names = F)
-write.csv(fish2019_sum, "output/fish2019_sum.csv", row.names = F)
-
-```
-# analysis
-```{r}
-
-
-
-```
-
