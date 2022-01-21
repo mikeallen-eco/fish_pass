@@ -1,6 +1,7 @@
 # function to summarize data by antenna and fish
 fishsum <- function(ping_data){
 
+temp <- 
 ping_data %>%
   filter(tag_short %in% tags$tag_short) %>%
   arrange(tag_short, datetime) %>%
@@ -15,7 +16,10 @@ ping_data %>%
                      values_from = c(first_ping, last_ping, n)) %>%
   # add in tagging time and common name
   left_join(tags) %>%
-  select(tag_short, Common.Name, tag_time, 2:13) %>%
+  select(tag_short, Common.Name, tag_time, 
+         starts_with("first_ping"),
+         starts_with("last_ping"), 
+         starts_with("n_")) %>%
   # calculate durations
   # attraction time (tag_time -> min A1)
   # staging time (min A1 -> max A1)
@@ -40,4 +44,21 @@ ping_data %>%
                end = last_ping_A4)
     )) / (3600 * 24)
   )
-}  
+
+if(year(min(temp$first_ping_A1, na.rm = T)) < 2015){
+  temp <- temp %>%
+    mutate(first_ping_A2 = NA,
+           last_ping_A2 = NA,
+           first_ping_A3 = NA,
+           last_ping_A3 = NA,
+           n_A2 = NA,
+           n_A3 = NA)
+}
+
+temp <- temp %>%
+  mutate(year = year(min(temp$first_ping_A1, na.rm = T))) %>%
+  select(year, 1:19) %>%
+  arrange(year)
+
+return(temp)
+} 

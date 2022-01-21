@@ -89,23 +89,93 @@ fish2016_sum <- fishsum(data2016)
 fish2017_sum <- fishsum(data2017)
 fish2018_sum <- fishsum(data2018)
 fish2019_sum <- fishsum(data2019)
-```
+fish_sum <- fish2019_sum %>%
+  bind_rows(fish2018_sum, fish2017_sum, fish2016_sum,
+            fish2015_sum, fish2014_sum, fish2013_sum, 
+            fish2012_sum) %>%
+  arrange(year, Common.Name, tag_time)
+
 # write fish summary csv files for review
+# write.csv(fish_sum, "output/fish_sum.csv", row.names = F)
+
+# remove unneeded objects
+rm(fish2019_sum, fish2018_sum, fish2017_sum, fish2016_sum,
+            fish2015_sum, fish2014_sum, fish2013_sum, 
+            fish2012_sum)
+```
+# Format fish data for "passage proportion" analysis
 ```{r}
-write.csv(fish2012_sum, "output/fish2012_sum.csv", row.names = F)
-write.csv(fish2013_sum, "output/fish2013_sum.csv", row.names = F)
-write.csv(fish2014_sum, "output/fish2014_sum.csv", row.names = F)
-write.csv(fish2015_sum, "output/fish2015_sum.csv", row.names = F)
-write.csv(fish2016_sum, "output/fish2016_sum.csv", row.names = F)
-write.csv(fish2017_sum, "output/fish2017_sum.csv", row.names = F)
-write.csv(fish2018_sum, "output/fish2018_sum.csv", row.names = F)
-write.csv(fish2019_sum, "output/fish2019_sum.csv", row.names = F)
+# subset target species and create 1/0 passage variable (did the fish reach A4)
+f <- tags %>%
+  select(tag_short, Common.Name, tag_time) %>%
+  filter(Common.Name %in% c("American Shad",
+                            "River Herring",
+                            "Blueback Herring")) %>%
+  left_join(select(fish_sum, year, tag_short, first_ping_A4), by = "tag_short") %>%
+  filter(!duplicated(tag_short)) %>% # remove 3 duplicates (inter-year returns)
+  mutate(passage = case_when(is.na(first_ping_A4) ~ 0,
+                               TRUE ~ 1),
+         year = case_when(is.na(year) ~ year(tag_time),
+                          TRUE ~ year))
+
+cbind.data.frame(
+  trials = aggregate(f$passage, by = list(f$year), length),
+  successes = aggregate(f$passage, by = list(f$year), sum)[,2],
+  prop = aggregate(f$passage, by = list(f$year), mean)[,2]
+  )
+
+shad_data <- list(
+  D = 1,
+  N = nrow(filter(f, Common.Name == "American Shad")),
+  L = length(unique(filter(f, Common.Name == "American Shad")$year)),
+  y = filter(f, Common.Name == "American Shad")$passage,
+  ll = as.numeric(as.factor(filter(f, Common.Name == "American Shad")$year)),
+  x = rbind(rep(1, nrow(filter(f, Common.Name == "American Shad"))))
+)
+
 
 ```
-# analysis
+# Defining the Stan model
+Modified from here:
+https://mc-stan.org/docs/2_28/stan-users-guide/hierarchical-logistic-regression.html
+```{r}
+cat(file = "scripts/the_stan_model.stan", 
+"
+data {
+  int<lower=1> D;
+  int<lower=0> N;
+  int<lower=1> L;
+  array[N] int<lower=0, upper=1> y;
+  array[N] int<lower=1, upper=L> ll;
+  array[N] row_vector[D] x;
+}
+parameters {
+  array[D] real mu;
+  array[D] real<lower=0> sigma;
+  array[L] vector[D] beta;
+}
+model {
+  for (d in 1:D) {
+    mu[d] ~ normal(0, 100);
+    for (l in 1:L) {
+      beta[l, d] ~ normal(mu[d], sigma[d]);
+    }
+  }
+  for (n in 1:N) {
+    y[n] ~ bernoulli(inv_logit(x[n] * beta[ll[n]]));
+  }
+}
+"
+)
+```
+
 ```{r}
 
+library(rstan)
+rstan_options(auto_write = TRUE)
 
-
+stan(file = "scripts/the_stan_model.stan",
+     model_name = "shad passage",
+     data = shad_data)
 ```
 

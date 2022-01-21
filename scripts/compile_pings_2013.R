@@ -110,3 +110,4 @@ data2013 <- data2013 %>%
   mutate(year = "2013")
 
 rm(file_data_list, data, data_all, datadir, filename, filepath, files, i)
+rm(data2013A, data2013R)
