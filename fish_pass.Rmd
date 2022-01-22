@@ -244,12 +244,14 @@ shad_plot %>%
                     y = year), width = 0) +
   geom_errorbar(aes(xmin = plogis(q10), xmax = plogis(q90), 
                     y = year), width = 0, size = 1) +
-  geom_point(aes(x = plogis(mean), y = year), size = 3.5,
+  geom_point(aes(x = plogis(mean), y = year), size = 4,
              color = "black") +
   scale_x_continuous(limits = c(0,1)) +
   theme_bw() +
+  theme(text = element_text(size = 14)) +
   labs(y = "", x = "Passage rate", title = "American Shad")
 
+# ggsave("figures/shad_passage_placeholder.png", height = 6, width = 6, dpi = 400)
   
 ```
 
