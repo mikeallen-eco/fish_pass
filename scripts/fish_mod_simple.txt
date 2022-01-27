@@ -1,0 +1,16 @@
+
+model{
+for(s in 1:nfishyears){
+  z[s] ~ dbin(theta[s], N[s])
+  theta[s] ~ dbeta( omega[c[s]]*(kappa[c[s]]-2 )+1 ,
+                    (1-omega[c[s]])*(kappa[c[s]]-2)+1)
+}  
+
+for( c in 1:nfish){
+omega[c] ~ dbeta( 1.0, 1.0 )
+kappa[c] <- kappaMinusTwo[c] + 2
+kappaMinusTwo[c] ~ dgamma(0.01, 0.01) 
+
+}
+
+}
