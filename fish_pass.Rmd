@@ -10,10 +10,9 @@ Load packages, functions, & data; format data
 library(dplyr)
 library(ggplot2)
 library(stringr)
+library(tidyr)
 library(wesanderson)
 library(lubridate)
-source("scripts/plot_by_tag_function.R")
-source("scripts/plot_by_antenna_function.R")
 source("scripts/fishsum_function.R")
 `%notin%` <- Negate(`%in%`)
 
@@ -49,9 +48,6 @@ fish_sum <- fish2019_sum %>%
             fish2015_sum, fish2014_sum, fish2013_sum, 
             fish2012_sum) %>%
   arrange(year, Common.Name, tag_time)
-
-# write fish summary csv files for review
-# write.csv(fish_sum, "output/fish_sum.csv", row.names = F)
 
 # remove unneeded objects
 rm(fish2019_sum, fish2018_sum, fish2017_sum, fish2016_sum,
@@ -140,47 +136,10 @@ fish_jags_data <- list(
   c = both$fish
 )
 ```
-# Export cleaned, compiled data for inspection
+# Save data and diagnostic plot files for inspection
+Need to be checked by Anthony
 ```{r}
-write.csv(data2012, 
-          "output/2012_clean_detection_data.csv", row.names=F)
-write.csv(data2013, 
-          "output/2013_clean_detection_data.csv", row.names=F)
-write.csv(data2014, 
-          "output/2014_clean_detection_data.csv", row.names=F)
-write.csv(data2015, 
-          "output/2015_clean_detection_data.csv", row.names=F)
-write.csv(data2016, 
-          "output/2016_clean_detection_data.csv", row.names=F)
-write.csv(data2017, 
-          "output/2017_clean_detection_data.csv", row.names=F)
-write.csv(data2018, 
-          "output/2018_clean_detection_data.csv", row.names=F)
-write.csv(data2019, 
-          "output/2019_clean_detection_data.csv", row.names=F)
-```
-# Plot pings by tag to identify which belong to fish
-```{r}
-# plot pings by tag number to check and identify fish
-plot_by_tag(data2012)
-plot_by_tag(data2013)
-plot_by_tag(data2014)
-plot_by_tag(data2015)
-plot_by_tag(data2016)
-plot_by_tag(data2017)
-plot_by_tag(data2018)
-plot_by_tag(data2019)
-```
-# Plot pings by tag to identify which belong to fish
-```{r}
-plot_by_antenna(data2012)
-plot_by_antenna(data2013)
-plot_by_antenna(data2014)
-plot_by_antenna(data2015)
-plot_by_antenna(data2016)
-plot_by_antenna(data2017)
-plot_by_antenna(data2018)
-plot_by_antenna(data2019)
+# source("scripts/save_diagnostics.R")
 ```
 # JAGS model for fish passage proportion
 Hyperparameters for both omega[c] and kappa[c]
@@ -203,30 +162,33 @@ kappaMinusTwo[c] ~ dgamma(S0, R0)
 
 }
 
-omega0 ~ dbeta(1.0, 1.0)
+omega0 ~ dbeta(3, 3)
 kappa0 <- kappaMinusTwo0 + 2
-kappaMinusTwo0 ~ dgamma(0.01, 0.01) # mean=1, sd = 10
+kappaMinusTwo0 ~ dgamma(0.1, 0.01) # mean=1, sd = 10
 
-S0 ~ dgamma(0.01, 0.01)
-R0 ~ dgamma(0.01, 0.01)
+S0 ~ dgamma(0.1, 0.01)
+R0 ~ dgamma(0.1, 0.01)
 }
 "
 )
 
-fish_mod <- jagsUI::jags(data = fish_jags_data,
+fish_mod_beta3_3e <- jagsUI::jags(data = fish_jags_data,
              model.file = "scripts/eight_coins_two_mints_hyperkappa.txt",
-             n.iter = 60000, n.burnin = 50000,
-             parameters.to.save = c("theta", "omega"),
-             n.chains = 3, parallel = T, n.thin = 10,
+             n.iter = 500000, n.burnin = 400000,
+             parameters.to.save = c("theta", "omega", "kappa",
+                                    "S0", "R0"),
+             n.chains = 3, parallel = T, n.thin = 100,
              inits = function()list(omega =
-                                      c(rnorm(1,.45,.01),
-                                        rnorm(1,.1,.01)),
-                                    kappaMinusTwo = c(rnorm(1,20,.1),
-                                                      rnorm(1,10,.1))
+                                      c(rnorm(1,.47,.01),
+                                        rnorm(1,.9,.01)),
+                                    kappaMinusTwo = c(rnorm(1,30,2),
+                                                      rnorm(1,11,2))
              ))
-# saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_012322f.rds")
-# fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_012322f.rds")
-fish_mod
+fish_mod_beta3_3e
+fish_mod <- fish_mod_beta3_3e
+# saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_beta3_3b_012822_all_converged.rds")
+# fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3b_012822_all_converged.rds")
+fish_mod 
 dev.new(); plot(fish_mod)
 thetas <- tidybayes::gather_draws(fish_mod, theta[i]) %>%
   group_by(i) %>%
@@ -278,7 +240,7 @@ thetas %>%
             color = "darkgray") +
   annotate("text", x = .94, y = 2019, label = "n =", color = "darkgray")
 
-ggsave("other/figures/successful_jags_run_hyperkappa6.png", 
+ggsave("other/figures/successful_jags_run_hyperkappa_beta33_gamma.1_.01_allconverged2.png", 
        width = 7, heigh = 5, dpi = 400)
 #to do: 
 #1 add species means
@@ -298,21 +260,158 @@ v <- read_xlsx("other/2 IFW Video Data Golden Master 11_2_21.xlsx",
   tally() %>%
   filter(species %in% c("American Shad", "River Herring spp."))
 
-# Next up: add "i" info into the v object so it can be joined to thetas for multiplication
+# Match up year time series with 
+fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3b_012822_all_converged.rds")
+fish_mod
+
+# collect all theta posterior draws and add fish/year info
+theta_draws <- tidybayes::gather_draws(fish_mod, theta[i]) %>%
+  left_join(data.frame(i = 1:15, 
+                       year = c(2012:2017,2019,2012:2019))) %>%
+  ungroup() %>%
+  mutate(species = c(rep("American Shad", 21000), 
+                     rep("River Herring spp.", 24000))) 
+
+# collect omega (fish average) passage rate draws & add fish/year
+# (just Shad in 2018 as that is the year with no passage info)
+omega_draws <- tidybayes::gather_draws(fish_mod, omega[i]) %>%
+  filter(i == 1) %>%
+  mutate(year = 2018,
+         species = "American Shad")
+
+# join posterior draws to fish counts
+fish_n_draws <- theta_draws %>%
+  # add in global average (omega) passage draws for shad
+  # in 2018 with no passage data  
+  bind_rows(omega_draws) %>%
+  # join with video count data
+  left_join(v) %>%
+  filter(is.na(n) != TRUE) # remove 2012 which has no counts
+
+# create corrected n and summarize draws
+fish_n <- fish_n_draws %>%
+  mutate(nhat = n / .value) %>%
+  group_by(species, year) %>%
+  summarise(nhat_mean = mean(nhat),
+            nhat_q2.5 = quantile(nhat, .025),
+            nhat_q97.5 = quantile(nhat, .975),
+            nhat_q10 = quantile(nhat, .1),
+            nhat_q90 = quantile(nhat, .9),
+            n = mean(n),
+            .groups = "keep")
+
+# plot nhat by species and year with credible intervals
+fish_n %>%
+  ggplot() +
+  geom_ribbon(aes(x = year, ymin = nhat_q2.5, 
+                  ymax = nhat_q97.5),
+              alpha = 0.5, fill = "steelblue") +
+  geom_line(aes(x = year, y = nhat_mean),
+            color = "dodgerblue", size = 1) +
+  geom_line(aes(x = year, y = n), size = 0.5, lty = 2, 
+            color = "darkgray") +
+  facet_wrap(~species) +
+  scale_y_log10() +
+  theme_bw() +  
+  theme(text = element_text(size = 14)) +
+  theme(strip.background = element_rect(fill="white")) +
+  labs(x = "", y = "Estimated run size (n)")
+# ggsave("other/figures/run_size_passage_corrected_mod_converged.png",
+#        height = 4, width = 7,
+#        dpi = 400)
 
 v %>%
   ggplot() +
-  geom_line(aes(x = year, y = n, color = species))
+  geom_line(aes(x = year, y = n), size = 1,
+            color = "dodgerblue") +
+  facet_wrap(~species) +
+  scale_y_log10() +
+  theme_bw() +  
+  theme(text = element_text(size = 14)) +
+  labs(x = "", y = "Observed run size (n)")
 
+ggsave("other/figures/run_size_observed_mod_converged.png", height = 4, width = 7,
+       dpi = 400)
 ```
-# Match up year time series with 
 
+
+testing stan
 ```{r}
 
-fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_012322f.rds")
-fish_mod
+cat("other/stan_script.stan",
+"
+data {
+  int<lower=1> D;
+  int<lower=0> N;
+  int<lower=1> L;
+  array[N] int<lower=0, upper=1> y;
+  array[N] int<lower=1, upper=L> ll;
+  array[N] row_vector[D] x;
+}
+parameters {
+  array[D] real mu;
+  array[D] real<lower=0> sigma;
+  array[L] vector[D] beta;
+}
+model {
+  for (d in 1:D) {
+    mu[d] ~ normal(0, 100);
+    for (l in 1:L) {
+      beta[l, d] ~ normal(mu[d], sigma[d]);
+    }
+  }
+  for (n in 1:N) {
+    y[n] ~ bernoulli(inv_logit(beta[ll[n]]));
+  }
+}
+"    )
 
-thetas <- tidybayes::gather_draws(fish_mod, theta[i]) %>%
-  mutate(year = case_when(i %in% c()))
+stan_data <- list(
+  y = f
+)
+library(rstan)
+rstan_options(auto_write = TRUE)
+
+stan(file = "scripts/the_stan_model.stan",
+     model_name = "shad passage",
+     data = shad_data)
 ```
+
+# Attraction, staging, passage times
+Warning: data are wrong at the moment until antennas are sorted out.
+```{r}
+fish_sum_plot = fish_sum %>%
+  mutate(sp_cat = case_when(Common.Name %in% 
+                              c("Blueback Herring", 
+                                "River Herring") ~
+                              "River Herring spp.",
+                            Common.Name == "American Shad" ~
+                              "American Shad",
+                            TRUE ~ "NA")) %>%
+  filter(sp_cat != "NA") %>%
+  select(sp_cat, ends_with("days")) %>%
+  pivot_longer(cols = ends_with("days")) %>%
+  mutate(order = case_when(name == "attraction.days" ~ 1,
+                           name == "staging.days" ~ 2,
+                           name == "passage.days" ~ 3),
+         name = forcats::fct_reorder(name, order))
+
+fish_sum_plot %>%
+  filter(value>=1,
+         value < 300) %>%
+ggplot() +
+  geom_boxplot(aes(x = sp_cat, y = value, fill = sp_cat)) +
+  facet_wrap(~name) +
+  theme_bw() + 
+  labs(x = "", y = "Days", fill = "") +
+  theme(text = element_text(size = 14),
+        axis.text.x = element_blank(),
+        legend.position = "bottom") +
+  scale_fill_manual(values = c("steelblue", "darkgreen"))
+
+# ggsave("other/figures/transit_time_wrong.png",
+#        height = 4, width = 7,
+#        dpi = 400)
+```
+
 
