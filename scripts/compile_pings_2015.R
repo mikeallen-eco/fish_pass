@@ -40,9 +40,9 @@ for(i in 1:length(files)){
                                    TRUE ~ "direction unknown"),
              # flag antenna names that don't match expectations
              flag = case_when(direction == "up" & 
-                                antenna %in% c("A1", "A2") ~ "mismatch",
+                                antenna %in% c("A4", "A2") ~ "mismatch",
                               direction == "down" & 
-                                antenna %in% c("A3", "A4") ~ "mismatch",
+                                antenna %in% c("A2", "A4") ~ "mismatch",
                               TRUE ~ "OK"),
              file = filename)
 
@@ -75,21 +75,22 @@ data2015 <- do.call(rbind, file_data_list) %>%
   # format date and time
   mutate(date = as.Date(date),
          datetime = ymd_hms(paste(date, time), tz = "America/New_York")) %>%
-  # rename antennas as needed (see Issue #5 on github.com/mikeallen-eco/fish_pass)
-  # 2015: A1= Down A1, A2= Down A3, A3=Up A3, A4= Up A1
-  mutate(antenna = case_when(antenna == "A1" & direction == "down" ~ "A1",
-                             antenna == "A3" & direction == "down" ~ "A2",
+  # Fixed antenna naming re IFW Antenna Key.xlsx (see Issue #5 on github.com/mikeallen-eco/fish_pass)
+  # 2015: A1= Down A3, A2= Down A1, A3=Up A3, A4= Up A1
+  mutate(antenna = case_when(antenna == "A3" & direction == "down" ~ "A1",
+                             antenna == "A1" & direction == "down" ~ "A2",
                              antenna == "A3" & direction == "up" ~ "A3",
                              antenna == "A1" & direction == "up" ~ "A4",
                              TRUE ~ "unknown"))
 
 # check for antenna naming issues, etc.
-unique(data2015$antenna)
-unique(data2015$tag)
-unique(data2015$tag_short)
-unique(data2015$date)
+sort(unique(data2015$antenna))
+sort(unique(data2015$tag))
+sort(unique(data2015$tag_short))
+sort(unique(data2015$date))
 hist(yday(data2015$date))
 table(data2015$direction)
+table(data2015$flag)
 table(year(data2015$date))
 
 # subset final columns

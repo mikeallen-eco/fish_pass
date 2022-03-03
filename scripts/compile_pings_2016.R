@@ -2,7 +2,6 @@
 library(dplyr)
 library(ggplot2)
 library(stringr)
-library(wesanderson)
 library(lubridate)
 library(here)
 
@@ -40,9 +39,9 @@ for(i in 1:length(files)){
                                    TRUE ~ "direction unknown"),
              # flag antenna names that don't match expectations
              flag = case_when(direction == "up" & 
-                                antenna %in% c("A1", "A2") ~ "mismatch",
+                                antenna %in% c("A4", "A2") ~ "mismatch",
                               direction == "down" & 
-                                antenna %in% c("A3", "A4") ~ "mismatch",
+                                antenna %in% c("A2", "A4") ~ "mismatch",
                               TRUE ~ "OK"),
              file = filename)
 
@@ -81,11 +80,12 @@ data2016 <- do.call(rbind, file_data_list) %>%
   filter(flag != "empty",
          date != "2032-09-12",
          antenna != "1") %>%
-  # rename antennas as needed (see Issue #5 on github.com/mikeallen-eco/fish_pass)
+  # Fixed antenna naming re IFW Antenna Key.xlsx (see Issue #5 on github.com/mikeallen-eco/fish_pass)
+  # 2016: A1= Down A1, A2= Down A3, A3=Up A3, A4= Up A1
   mutate(antenna = case_when(antenna == "A1" & direction == "down" ~ "A1",
-                             antenna == "A1" & direction == "up" ~ "A3",
                              antenna == "A3" & direction == "down" ~ "A2",
-                             antenna == "A3" & direction == "up" ~ "A4",
+                             antenna == "A3" & direction == "up" ~ "A3",
+                             antenna == "A1" & direction == "up" ~ "A4",
                              antenna == "A4" ~ "A4",
                              TRUE ~ "unknown"))
 

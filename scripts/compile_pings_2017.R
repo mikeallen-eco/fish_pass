@@ -2,7 +2,6 @@
 library(dplyr)
 library(ggplot2)
 library(stringr)
-library(wesanderson)
 library(lubridate)
 library(here)
 
@@ -80,8 +79,6 @@ data2017 <- do.call(rbind, file_data_list) %>%
   mutate(tag_short = str_sub(tag, - 9, - 1)) %>%
   # format date and time
   mutate(date = as.Date(date),
-         # datetime = strptime(paste(date, time), 
-         #                     format="%Y-%m-%d %H:%M:%OS"),
          datetime = ymd_hms(paste(date, time), tz = "America/New_York"))
 
 # check for antenna naming issues, etc.
@@ -91,6 +88,7 @@ unique(data2017$tag_short)
 unique(data2017$date)
 hist(yday(data2017$date))
 table(data2017$direction)
+table(year(data2017$date))
 
 # subset final columns
 data2017 <- data2017 %>%

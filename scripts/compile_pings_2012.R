@@ -1,3 +1,7 @@
+# to do
+# Issue #5 re antenna names (good according to lookup table)
+# why are there 154 pings from 2011?
+
 # Packages
 library(dplyr)
 library(ggplot2)

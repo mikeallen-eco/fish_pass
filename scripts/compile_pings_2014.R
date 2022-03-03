@@ -121,13 +121,22 @@ data2014 <- do.call(rbind, file_data_list) %>%
   # this is issue # 14 on GitHub. They all contain \'s and an L
   filter(grepl(tag_short, pattern = "L") == F) %>%
   # remove a single record from 2017 (tag 0000_0000000180843403)
-  filter(year(date) != 2017)
+  filter(year(date) != 2017) %>%
+  # fix antenna names based on IFW Antenna Key.xlsx file info
+  # all* records in files named with _A2 should be A1  
+  mutate(antenna = case_when(grepl(file, pattern = "_A2") ~ "A1",
+                             TRUE ~ antenna)) %>%
+  # *except pings from 05_29_14_A2.TXT which should be A4
+  mutate(antenna = case_when(file == "05_29_14_A2.TXT" ~ "A4",
+                             TRUE ~ antenna)) %>%
+  # all records in files named with _A1 should be A4  
+  mutate(antenna = case_when(grepl(file, pattern = "_A1") ~ "A4",
+                             TRUE ~ antenna))
 
 
 # check for antenna naming issues, etc.
 unique(data2014$antenna)
 unique(data2014$antenna_original)
-
 unique(data2014$tag)
 unique(data2014$tag_short)
 unique(data2014$date)

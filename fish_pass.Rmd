@@ -4,6 +4,16 @@ author: "Mike Allen"
 date: "12/7/2021"
 output: html_document
 ---
+to check:
+1. why 154 pings from 2011 in data2012?
+2. why is there an A3 antenna in 2013?
+3. File "05_15_14 DownStream.TXT" has no antenna names
+4. File "06_05_14.TXT" has no D/E/B codes
+5. 2016: where antenna == "A4" ~ "A4" (03_18_16 down.txt)
+6. what's up with herring w/ "226000011055/35/85" tag
+
+
+
 # Packages
 Load packages, functions, & data; format data
 ```{r}
@@ -13,15 +23,50 @@ library(stringr)
 library(tidyr)
 library(wesanderson)
 library(lubridate)
+library(readxl)
 source("scripts/fishsum_function.R")
 `%notin%` <- Negate(`%in%`)
 
 # read in tagging data
-tags <- read.csv("other/tagging_data_11_2_21.csv") %>%
-  filter(Tag.Number != "No Tag Number",
-         Tag.Number != "-") %>%
-  mutate(tag_short = str_sub(Tag.Number, - 9, - 1),
-         tag_time = mdy_hm(Date.and.Time, tz = "America/New_York"))
+# note: currently excludes herring w/ "226000011055/35/85" tag
+
+tags <- read_xlsx(
+  "other/1 IFW Tagging Data Golden Master 2_25_22.xlsx",
+  sheet = "All Tagged Fish") %>%
+  rename(tag = 'Tag Number',
+         datetime = as.character('Date and Time'),
+         Common.Name = 'Common Name') %>%
+  mutate(tag = as.numeric(tag)) %>%
+  filter(is.na(tag) == FALSE) %>%
+  mutate(tag_short = str_sub(tag, - 9, - 1),
+         tag_time = ymd_hms(datetime, 
+                           tz = "America/New_York"))
+
+# video time series
+v_temp <- 
+  read_xlsx("other/2 IFW Video Data Golden Master 11_2_21.xlsx",
+               sheet = "Grouped") %>%
+  select(Date, species = Species) %>%
+  mutate(year = year(Date)) %>%
+  group_by(species, year) %>%
+  tally() %>%
+  filter(species %in% c("American Shad", "River Herring spp."))
+
+# historic Island Farm Wier Video counts
+shad_hist <- data.frame(species = "American Shad",
+                        year = c(1996:2005),
+                        n = c(48, 76, 149, 582, NA, 717, 
+                                1114, 362, NA, 13))
+
+herring_hist <- data.frame(species = "River Herring spp.",
+                           year = c(1996:2005),
+                        n = c(0, 117, 9, 114, NA, 61, 
+                                17, 12, NA, 0))
+
+# combine recent and historic video count data
+v <- v_temp %>%
+  bind_rows(shad_hist, herring_hist) %>%
+  arrange(species, year)
 
 # Compile receiver data
 # Data are compiled, filtered, and cleaned within these scripts. Anthony should review to ensure all filtering was OK.
@@ -59,7 +104,8 @@ f <- tags %>%
   select(tag_short, Common.Name, tag_time) %>%
   filter(Common.Name %in% c("American Shad",
                             "River Herring",
-                            "Blueback Herring")) %>%
+                            "Blueback Herring",
+                            "Alewife")) %>%
   left_join(select(fish_sum, year, tag_short, first_ping_A4), by = "tag_short") %>%
   filter(!duplicated(tag_short)) %>% # remove 3 duplicates (inter-year returns)
   mutate(passage = case_when(is.na(first_ping_A4) ~ 0,
@@ -68,15 +114,15 @@ f <- tags %>%
                           TRUE ~ year)),
          year_num = as.numeric(as.factor(year)),
          year_char = paste0("y", year),
-         sp = as.factor(case_when(grepl(Common.Name, pattern = "Herring") ~
+         sp = as.factor(case_when(grepl(Common.Name, pattern = "Herring|Alewife") ~
                           "Herring",
                         TRUE ~ "Shad")))
 
 shad_df <- f %>%
-  filter(Common.Name == "American Shad")
+  filter(sp == "Shad")
 
 herring_df <- f %>%
-  filter(grepl(Common.Name, pattern = "Herring"))
+  filter(sp == "Herring")
 
 # examine shad data
 shad_raw_sum <- cbind.data.frame(
@@ -137,7 +183,7 @@ fish_jags_data <- list(
 )
 ```
 # Save data and diagnostic plot files for inspection
-Need to be checked by Anthony
+Need to be checked by Anthony.
 ```{r}
 # source("scripts/save_diagnostics.R")
 ```
@@ -145,7 +191,7 @@ Need to be checked by Anthony
 Hyperparameters for both omega[c] and kappa[c]
 ```{r}
 
-cat(file = "scripts/eight_coins_two_mints_hyperkappa.txt",
+cat(file = "scripts/fish_mod.txt",
 "
 model{
 for(s in 1:nfishyears){
@@ -172,8 +218,8 @@ R0 ~ dgamma(0.1, 0.01)
 "
 )
 
-fish_mod_beta3_3e <- jagsUI::jags(data = fish_jags_data,
-             model.file = "scripts/eight_coins_two_mints_hyperkappa.txt",
+fish_mod_beta3_3f <- jagsUI::jags(data = fish_jags_data,
+             model.file = "scripts/fish_mod.txt",
              n.iter = 500000, n.burnin = 400000,
              parameters.to.save = c("theta", "omega", "kappa",
                                     "S0", "R0"),
@@ -181,13 +227,16 @@ fish_mod_beta3_3e <- jagsUI::jags(data = fish_jags_data,
              inits = function()list(omega =
                                       c(rnorm(1,.47,.01),
                                         rnorm(1,.9,.01)),
-                                    kappaMinusTwo = c(rnorm(1,30,2),
+                                    kappaMinusTwo = c(rnorm(1,25,2),
                                                       rnorm(1,11,2))
              ))
-fish_mod_beta3_3e
-fish_mod <- fish_mod_beta3_3e
-# saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_beta3_3b_012822_all_converged.rds")
-# fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3b_012822_all_converged.rds")
+fish_mod_beta3_3f
+fish_mod <- fish_mod_beta3_3f
+# saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_beta3_3f_030322_all_converged.rds")
+
+# before Alewife, was using:
+# other/output/fish_jags_mod_hyperkappa_beta3_3b_012822_all_converged.rds
+# fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3f_030322_all_converged.rds")
 fish_mod 
 dev.new(); plot(fish_mod)
 thetas <- tidybayes::gather_draws(fish_mod, theta[i]) %>%
@@ -240,28 +289,15 @@ thetas %>%
             color = "darkgray") +
   annotate("text", x = .94, y = 2019, label = "n =", color = "darkgray")
 
-ggsave("other/figures/successful_jags_run_hyperkappa_beta33_gamma.1_.01_allconverged2.png", 
+ggsave("other/figures/successful_jags_run_hyperkappa_beta33_gamma.1_.01_allconverged_run030322.png", 
        width = 7, heigh = 5, dpi = 400)
-#to do: 
-#1 add species means
-#2 add raw proportions
-#3 add sample size
-
 ```
 
 # Video time series 
 ```{r}
-library(readxl)
-v <- read_xlsx("other/2 IFW Video Data Golden Master 11_2_21.xlsx",
-               sheet = "Grouped") %>%
-  select(Date, species = Species) %>%
-  mutate(year = year(Date)) %>%
-  group_by(species, year) %>%
-  tally() %>%
-  filter(species %in% c("American Shad", "River Herring spp."))
 
 # Match up year time series with 
-fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3b_012822_all_converged.rds")
+fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3b_030322_all_converged.rds")
 fish_mod
 
 # collect all theta posterior draws and add fish/year info
@@ -274,10 +310,43 @@ theta_draws <- tidybayes::gather_draws(fish_mod, theta[i]) %>%
 
 # collect omega (fish average) passage rate draws & add fish/year
 # (just Shad in 2018 as that is the year with no passage info)
-omega_draws <- tidybayes::gather_draws(fish_mod, omega[i]) %>%
-  filter(i == 1) %>%
-  mutate(year = 2018,
-         species = "American Shad")
+omega_draws_temp <- tidybayes::gather_draws(fish_mod, omega[i]) %>%
+  filter(i == 1)
+
+omega_draws_temp_shad <- mutate(omega_draws_temp, 
+                      year = shad_hist$year[1]) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[2])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[3])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[4])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[5])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[6])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[7])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[8])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[9])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
+  bind_rows(mutate(omega_draws_temp, year = 2018)) %>%
+  mutate(species = "American Shad")
+
+omega_draws_temp_herring <- mutate(omega_draws_temp, 
+                      year = shad_hist$year[1]) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[2])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[3])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[4])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[5])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[6])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[7])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[8])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[9])) %>%
+  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
+  bind_rows(mutate(omega_draws_temp, year = 2018)) %>%
+  mutate(species = "River Herring spp.")
+
+omega_draws <- omega_draws_temp_shad %>%
+  bind_rows(omega_draws_temp_herring)
+
+rm(omega_draws_temp, 
+   omega_draws_temp_shad, 
+   omega_draws_temp_herring)
 
 # join posterior draws to fish counts
 fish_n_draws <- theta_draws %>%
@@ -286,7 +355,8 @@ fish_n_draws <- theta_draws %>%
   bind_rows(omega_draws) %>%
   # join with video count data
   left_join(v) %>%
-  filter(is.na(n) != TRUE) # remove 2012 which has no counts
+  filter(is.na(n) != TRUE) %>% # remove years with no counts
+  arrange(species, year)
 
 # create corrected n and summarize draws
 fish_n <- fish_n_draws %>%
@@ -298,7 +368,16 @@ fish_n <- fish_n_draws %>%
             nhat_q10 = quantile(nhat, .1),
             nhat_q90 = quantile(nhat, .9),
             n = mean(n),
-            .groups = "keep")
+            .groups = "keep") %>%
+  bind_rows(data.frame(species = c("American Shad",
+                                    "River Herring spp."),
+                        year = c(2000, 2006:2012, ,
+                        nhat_mean = NA,
+                        nhat_q2.5 = NA,
+                        nhat_q97.5 = NA,
+                        nhat_q10 = NA,
+                        nhat_q90 = NA,
+                        n = 0))
 
 # plot nhat by species and year with credible intervals
 fish_n %>%
