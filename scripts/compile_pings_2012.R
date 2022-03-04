@@ -1,7 +1,3 @@
-# to do
-# Issue #5 re antenna names (good according to lookup table)
-# why are there 154 pings from 2011?
-
 # Packages
 library(dplyr)
 library(ggplot2)
@@ -117,14 +113,15 @@ data2012 <- data2012A1 %>%
                                      tz = "America/New_York"),
                 TRUE ~ datetime),
          date = case_when(year(date) == 2030 ~ ymd("2012-04-17"),
-                          TRUE ~ date))
+                          TRUE ~ date)) %>%
+  filter(year(datetime) != 2011)
 
 # check for antenna naming issues, etc.
 unique(data2012$antenna)
 unique(data2012$antenna_original)
 unique(data2012$tag)
 unique(data2012$tag_short)
-unique(data2012$date)
+sort(unique(data2012$date))
 hist(yday(data2012$date))
 table(data2012$direction)
 table(year(data2012$date))

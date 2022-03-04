@@ -236,9 +236,6 @@ fish_mod_beta3_3g
 fish_mod <- fish_mod_beta3_3g
 # saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_beta3_3g_030422_all_converged.rds")
 
-# before Alewife, was using:
-# other/output/fish_jags_mod_hyperkappa_beta3_3b_012822_all_converged.rds
-# fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3f_030322_all_converged.rds")
 fish_mod 
 dev.new(); plot(fish_mod)
 thetas <- tidybayes::gather_draws(fish_mod, theta[i]) %>%
@@ -299,7 +296,7 @@ ggsave("other/figures/successful_jags_run_hyperkappa_beta33_gamma.1_.01_allconve
 ```{r}
 
 # Match up year time series with 
-fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3f_030322_all_converged.rds")
+fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3g_030422_all_converged.rds")
 fish_mod
 
 # collect all theta posterior draws and add fish/year info
@@ -340,7 +337,6 @@ omega_draws_temp_herring <- mutate(omega_draws_temp,
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[8])) %>%
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[9])) %>%
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
-  bind_rows(mutate(omega_draws_temp, year = 2018)) %>%
   mutate(species = "River Herring spp.")
 
 omega_draws <- omega_draws_temp_shad %>%
@@ -433,7 +429,7 @@ fish_n %>%
   theme(text = element_text(size = 14)) +
   theme(strip.background = element_rect(fill="white")) +
   labs(x = "", y = "Estimated run size (n)")
-ggsave("other/figures/run_size_passage_corrected_lines_run030322.png",
+ggsave("other/figures/run_size_passage_corrected_lines_run030322b.png",
        height = 4, width = 7,
        dpi = 400)
 
@@ -444,7 +440,8 @@ Warning: data are wrong at the moment until antennas are sorted out.
 fish_sum_plot = fish_sum %>%
   mutate(sp_cat = case_when(Common.Name %in% 
                               c("Blueback Herring", 
-                                "River Herring") ~
+                                "River Herring",
+                                "Alewife") ~
                               "River Herring spp.",
                             Common.Name == "American Shad" ~
                               "American Shad",

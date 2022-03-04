@@ -67,7 +67,7 @@ data2013R <- do.call(rbind, file_data_list) %>%
   select(file, date, time, antenna = unknown3, tag = unknown2, 
          direction = type, flag = type) %>%
   # subset just pings labeled R
-  filter(flag == "R")
+  filter(flag == "R" | flag == "W")
 
 # combine A and R pings
 data2013 <- data2013A %>%
