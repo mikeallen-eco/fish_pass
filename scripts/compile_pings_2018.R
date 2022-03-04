@@ -2,7 +2,6 @@
 library(dplyr)
 library(ggplot2)
 library(stringr)
-library(wesanderson)
 library(lubridate)
 library(here)
 
@@ -64,13 +63,15 @@ data2018 <- do.call(rbind, file_data_list) %>%
   mutate(tag_short = str_sub(tag, - 9, - 1)) %>%
   # format date and time
   mutate(date = as.Date(date),
-         datetime = ymd_hms(paste(date, time), tz = "America/New_York"))
+         datetime = ymd_hms(paste(date, time), tz = "America/New_York")) %>%
+  # remove random ping from January that was from an outreach event
+  filter(date != "2018-01-27")
 
 # check for antenna naming issues, etc.
 unique(data2018$flag)
 unique(data2018$tag)
 unique(data2018$tag_short)
-unique(data2018$date)
+sort(unique(data2018$date))
 hist(yday(data2018$date))
 table(data2018$direction)
 

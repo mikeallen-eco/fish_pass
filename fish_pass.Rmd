@@ -4,15 +4,6 @@ author: "Mike Allen"
 date: "12/7/2021"
 output: html_document
 ---
-to check:
-1. why 154 pings from 2011 in data2012?
-2. why is there an A3 antenna in 2013?
-3. File "05_15_14 DownStream.TXT" has no antenna names
-4. File "06_05_14.TXT" has no D/E/B codes
-5. 2016: where antenna == "A4" ~ "A4" (03_18_16 down.txt)
-6. what's up with herring w/ "226000011055/35/85" tag
-
-
 
 # Packages
 Load packages, functions, & data; format data
@@ -97,7 +88,7 @@ fish_sum <- fish2019_sum %>%
 # remove unneeded objects
 rm(fish2019_sum, fish2018_sum, fish2017_sum, fish2016_sum,
             fish2015_sum, fish2014_sum, fish2013_sum, 
-            fish2012_sum)
+            fish2012_sum, v_temp)
 
 # subset target species and create 1/0 passage variable (did the fish reach A4)
 f <- tags %>%
@@ -179,7 +170,9 @@ fish_jags_data <- list(
   nfishyears = nfishyears,
   z = both$z,
   N = both$N,
-  c = both$fish
+  c = both$fish,
+  fallback_detect = c(rep(1,33), rep(0,106)),
+  fallback_n = 139
 )
 ```
 # Save data and diagnostic plot files for inspection
@@ -208,6 +201,14 @@ kappaMinusTwo[c] ~ dgamma(S0, R0)
 
 }
 
+fallback_p ~ dunif(0,1) # dbeta(3,3)
+for(i in 1:length(fallback_detect)){
+fallback_detect[i] ~ dbern(fallback_p)
+}
+
+# corrected for imperfect detection in the arrays
+fallback_p_cor <- fallback_p / 0.5
+
 omega0 ~ dbeta(3, 3)
 kappa0 <- kappaMinusTwo0 + 2
 kappaMinusTwo0 ~ dgamma(0.1, 0.01) # mean=1, sd = 10
@@ -218,11 +219,12 @@ R0 ~ dgamma(0.1, 0.01)
 "
 )
 
-fish_mod_beta3_3f <- jagsUI::jags(data = fish_jags_data,
+fish_mod_beta3_3g <- jagsUI::jags(data = fish_jags_data,
              model.file = "scripts/fish_mod.txt",
              n.iter = 500000, n.burnin = 400000,
              parameters.to.save = c("theta", "omega", "kappa",
-                                    "S0", "R0"),
+                                    "S0", "R0", "fallback_p",
+                                    "fallback_p_cor"),
              n.chains = 3, parallel = T, n.thin = 100,
              inits = function()list(omega =
                                       c(rnorm(1,.47,.01),
@@ -230,9 +232,9 @@ fish_mod_beta3_3f <- jagsUI::jags(data = fish_jags_data,
                                     kappaMinusTwo = c(rnorm(1,25,2),
                                                       rnorm(1,11,2))
              ))
-fish_mod_beta3_3f
-fish_mod <- fish_mod_beta3_3f
-# saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_beta3_3f_030322_all_converged.rds")
+fish_mod_beta3_3g
+fish_mod <- fish_mod_beta3_3g
+# saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_beta3_3g_030422_all_converged.rds")
 
 # before Alewife, was using:
 # other/output/fish_jags_mod_hyperkappa_beta3_3b_012822_all_converged.rds
@@ -289,7 +291,7 @@ thetas %>%
             color = "darkgray") +
   annotate("text", x = .94, y = 2019, label = "n =", color = "darkgray")
 
-ggsave("other/figures/successful_jags_run_hyperkappa_beta33_gamma.1_.01_allconverged_run030322.png", 
+ggsave("other/figures/successful_jags_run_hyperkappa_beta33_gamma.1_.01_allconverged_run030422.png", 
        width = 7, heigh = 5, dpi = 400)
 ```
 
@@ -297,7 +299,7 @@ ggsave("other/figures/successful_jags_run_hyperkappa_beta33_gamma.1_.01_allconve
 ```{r}
 
 # Match up year time series with 
-fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3b_030322_all_converged.rds")
+fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3f_030322_all_converged.rds")
 fish_mod
 
 # collect all theta posterior draws and add fish/year info
@@ -371,91 +373,71 @@ fish_n <- fish_n_draws %>%
             .groups = "keep") %>%
   bind_rows(data.frame(species = c("American Shad",
                                     "River Herring spp."),
-                        year = c(2000, 2006:2012, ,
+                        year = rep(c(2000, 2004, 2006:2012),2),
                         nhat_mean = NA,
                         nhat_q2.5 = NA,
                         nhat_q97.5 = NA,
                         nhat_q10 = NA,
                         nhat_q90 = NA,
-                        n = 0))
+                        n = NA)) %>%
+  arrange(species, year)
 
 # plot nhat by species and year with credible intervals
 fish_n %>%
   ggplot() +
-  geom_ribbon(aes(x = year, ymin = nhat_q2.5, 
+  # geom_ribbon(aes(x = year, ymin = nhat_q2.5, 
+  #                 ymax = nhat_q97.5),
+  #             alpha = 0.5, fill = "steelblue") +
+  geom_line(aes(x = year, y = nhat_mean+1),
+            color = "dodgerblue", size = .5) +
+  # geom_line(aes(x = year, y = n+1), size = 0.5, lty = 2, 
+  #           color = "darkgray") +
+  geom_point(aes(x = year, y = nhat_mean+1),
+             color = "dodgerblue", size = 2) +
+  geom_errorbar(aes(x = year, ymin = nhat_q2.5, 
                   ymax = nhat_q97.5),
-              alpha = 0.5, fill = "steelblue") +
-  geom_line(aes(x = year, y = nhat_mean),
-            color = "dodgerblue", size = 1) +
-  geom_line(aes(x = year, y = n), size = 0.5, lty = 2, 
-            color = "darkgray") +
+              alpha = 1, color = "dodgerblue",
+              width = 0.5) +
   facet_wrap(~species) +
   scale_y_log10() +
   theme_bw() +  
   theme(text = element_text(size = 14)) +
   theme(strip.background = element_rect(fill="white")) +
   labs(x = "", y = "Estimated run size (n)")
-# ggsave("other/figures/run_size_passage_corrected_mod_converged.png",
-#        height = 4, width = 7,
-#        dpi = 400)
+ggsave("other/figures/run_size_passage_corrected_points_run030322.png",
+       height = 4, width = 7,
+       dpi = 400)
 
-v %>%
+# same using line and ribbon
+# plot nhat by species and year with credible intervals
+fish_n %>%
   ggplot() +
-  geom_line(aes(x = year, y = n), size = 1,
-            color = "dodgerblue") +
+  geom_ribbon(aes(x = year, ymin = nhat_q2.5,
+                  ymax = nhat_q97.5),
+              alpha = 0.5, fill = "steelblue") +
+  geom_line(aes(x = year, y = nhat_mean+1),
+            color = "dodgerblue", size = 1) +
+  # geom_line(aes(x = year, y = n+1), size = 0.5, lty = 2,
+  #           color = "darkgray") +
+  geom_point(aes(x = year, y = nhat_mean+1),
+             color = "dodgerblue", size = 2, 
+              data = filter(fish_n, year == 2005)) +
+  geom_errorbar(aes(x = year, ymin = nhat_q2.5,
+                  ymax = nhat_q97.5),
+              alpha = 1, color = "dodgerblue",
+              width = 0.5, 
+              data = filter(fish_n, year == 2005)) +
   facet_wrap(~species) +
   scale_y_log10() +
   theme_bw() +  
   theme(text = element_text(size = 14)) +
-  labs(x = "", y = "Observed run size (n)")
-
-ggsave("other/figures/run_size_observed_mod_converged.png", height = 4, width = 7,
+  theme(strip.background = element_rect(fill="white")) +
+  labs(x = "", y = "Estimated run size (n)")
+ggsave("other/figures/run_size_passage_corrected_lines_run030322.png",
+       height = 4, width = 7,
        dpi = 400)
+
 ```
-
-
-testing stan
-```{r}
-
-cat("other/stan_script.stan",
-"
-data {
-  int<lower=1> D;
-  int<lower=0> N;
-  int<lower=1> L;
-  array[N] int<lower=0, upper=1> y;
-  array[N] int<lower=1, upper=L> ll;
-  array[N] row_vector[D] x;
-}
-parameters {
-  array[D] real mu;
-  array[D] real<lower=0> sigma;
-  array[L] vector[D] beta;
-}
-model {
-  for (d in 1:D) {
-    mu[d] ~ normal(0, 100);
-    for (l in 1:L) {
-      beta[l, d] ~ normal(mu[d], sigma[d]);
-    }
-  }
-  for (n in 1:N) {
-    y[n] ~ bernoulli(inv_logit(beta[ll[n]]));
-  }
-}
-"    )
-
-stan_data <- list(
-  y = f
-)
-library(rstan)
-rstan_options(auto_write = TRUE)
-
-stan(file = "scripts/the_stan_model.stan",
-     model_name = "shad passage",
-     data = shad_data)
-```
-
 # Attraction, staging, passage times
 Warning: data are wrong at the moment until antennas are sorted out.
 ```{r}

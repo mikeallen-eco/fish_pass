@@ -109,10 +109,15 @@ data2012 <- data2012A1 %>%
     antenna = case_when(antenna == "A2" ~ "A1",
                         antenna == "A1" ~ "A4",
                         TRUE ~ "unknown")) %>%
-  # removing 2 pings from the year 2030
+  # fix date on 2 pings from the year 2030
   # 04_05_12.TXT 11/10/2030 22:47:55.00
   # 04_18_12.TXT 11/10/2030 22:47:55.00
-  filter(year(datetime) != 2030)
+  mutate(datetime = case_when(
+                year(datetime) == 2030 ~ mdy_hms("04/17/2012 22:47:55.00",
+                                     tz = "America/New_York"),
+                TRUE ~ datetime),
+         date = case_when(year(date) == 2030 ~ ymd("2012-04-17"),
+                          TRUE ~ date))
 
 # check for antenna naming issues, etc.
 unique(data2012$antenna)

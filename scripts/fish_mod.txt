@@ -14,6 +14,14 @@ kappaMinusTwo[c] ~ dgamma(S0, R0)
 
 }
 
+fallback_p ~ dunif(0,1) # dbeta(3,3)
+for(i in 1:length(fallback_detect)){
+fallback_detect[i] ~ dbern(fallback_p)
+}
+
+# corrected for imperfect detection in the arrays
+fallback_p_cor <- fallback_p / 0.5
+
 omega0 ~ dbeta(3, 3)
 kappa0 <- kappaMinusTwo0 + 2
 kappaMinusTwo0 ~ dgamma(0.1, 0.01) # mean=1, sd = 10

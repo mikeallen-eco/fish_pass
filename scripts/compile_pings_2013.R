@@ -84,9 +84,9 @@ data2013 <- data2013A %>%
     antenna_original = antenna,
     antenna = case_when(antenna == "A2" ~ "A1",
                         antenna == "A1" ~ "A4",
-                        antenna == "A3" ~ "A3",
+                        antenna == "A3" ~ "A1", # changing A3->A1 per issue #17
                         TRUE ~ "unknown")) %>%
-  # removing xx pings with tag typos (but good data on either side)
+  # removing 3 pings with tag typos (but good data on either side)
   # 04_23_13.TXT 2013-04-03 16:08:25.46  
   # 06_17_13.TXT 2013-06-15 11:54:15.80
   # or with no data at all: 06_25_13.TXT 2013-06-25 08:28:11.35

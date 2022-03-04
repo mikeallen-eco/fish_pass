@@ -100,13 +100,14 @@ data2014 <- do.call(rbind, file_data_list) %>%
   filter(antenna_original != "0000000067143866",
          antenna_original != "00000000000067143866",
          antenna_original != "L1") %>%
-  # removing 3 data files with no usable data but that caused reading errors
-  # 4/16 has no data; 6/5/14 has no D/E/B codes, 5/15 has no antenna names
+  # removing 2 data files with no usable data but that caused reading errors
+  # 4/16 has no data; 6/5/14 has no D/E/B codes
   filter(file != "04_16_14.TXT",
-         file != "06_05_14.TXT",
-         file != "05_15_14 DownStream.TXT") %>%
+         file != "06_05_14.TXT") %>%
   # fix 2 pings with tag number missing an underscore
+  # and manually assigned antenna A1 to file "05_15_14 DownStream.TXT" (see issue #13)
   mutate(antenna = case_when(antenna_original == "0000000178695688" ~ "A4",
+                             file == "05_15_14 DownStream.TXT" ~ "A1",
                              TRUE ~ antenna),
          tag = case_when(antenna_original == "0000000178695688" 
                          ~ "0000_0000000178695688",
