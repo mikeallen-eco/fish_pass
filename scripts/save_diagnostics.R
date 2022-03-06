@@ -123,7 +123,8 @@ plot_by_antenna_day <- function(ping_data){
                                   "", "Aug", "", "Oct")) +
     scale_y_log10() +
     theme(text = element_text(size = 15)) +
-      labs(y = "No. pings / day", x = "")
+      labs(y = "No. pings / day", x = "",
+           title = as.character(year(ping_data$date[1])))
   
  ggsave(here("figures", paste0(stringr::str_sub(year(ping_data$date[1])), 
                                 "_antenna_pings_per_day.png")), 
