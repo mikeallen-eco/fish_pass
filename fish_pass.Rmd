@@ -59,6 +59,8 @@ v <- v_temp %>%
   bind_rows(shad_hist, herring_hist) %>%
   arrange(species, year)
 
+rm(v_temp)
+
 # Compile receiver data
 # Data are compiled, filtered, and cleaned within these scripts. Anthony should review to ensure all filtering was OK.
 source("scripts/compile_pings_2012.R")
@@ -83,12 +85,12 @@ fish_sum <- fish2019_sum %>%
   bind_rows(fish2018_sum, fish2017_sum, fish2016_sum,
             fish2015_sum, fish2014_sum, fish2013_sum, 
             fish2012_sum) %>%
-  arrange(year, Common.Name, tag_time)
+  arrange(species, tag_time)
 
 # remove unneeded objects
 rm(fish2019_sum, fish2018_sum, fish2017_sum, fish2016_sum,
             fish2015_sum, fish2014_sum, fish2013_sum, 
-            fish2012_sum, v_temp)
+            fish2012_sum)
 
 # subset target species and create 1/0 passage variable (did the fish reach A4)
 f <- tags %>%
@@ -97,15 +99,17 @@ f <- tags %>%
                             "River Herring",
                             "Blueback Herring",
                             "Alewife")) %>%
-  left_join(select(fish_sum, year, tag_short, first_ping_A4), by = "tag_short") %>%
-  filter(!duplicated(tag_short)) %>% # remove 3 duplicates (inter-year returns)
-  mutate(passage = case_when(is.na(first_ping_A4) ~ 0,
+  left_join(select(fish_sum, year = detect_year, tag_short, passage.days), by = "tag_short") %>%
+  # remove 1 herring tagged in 2014 but only detected in 2015
+  filter(is.na(passage.days) | passage.days < 300) %>%
+  mutate(passage = case_when(is.na(passage.days) ~ 0,
                                TRUE ~ 1),
          year = as.factor(case_when(is.na(year) ~ year(tag_time),
                           TRUE ~ year)),
          year_num = as.numeric(as.factor(year)),
          year_char = paste0("y", year),
-         sp = as.factor(case_when(grepl(Common.Name, pattern = "Herring|Alewife") ~
+         sp = as.factor(case_when(grepl(Common.Name, 
+                                        pattern="Herring|Alewife")~
                           "Herring",
                         TRUE ~ "Shad")))
 
@@ -157,8 +161,7 @@ both <- rbind(shad_raw_sum, herring_raw_sum) %>%
   select(N = trials.x, z = successes, -prop, year) %>%
   mutate(year = as.numeric(as.factor(year)),
          fish = c(rep(1,7), rep(2,8)),
-         fishyears = 1:15) #%>%
-  #bind_rows(data.frame(N=0,z = 0,year = 7, fish = 1))
+         fishyears = 1:15) 
 
 nfishyears <- 15
 nyears <- 8
@@ -219,12 +222,13 @@ R0 ~ dgamma(0.1, 0.01)
 "
 )
 
-fish_mod_beta3_3g <- jagsUI::jags(data = fish_jags_data,
+fish_mod_beta3_3h <- jagsUI::jags(data = fish_jags_data,
              model.file = "scripts/fish_mod.txt",
              n.iter = 500000, n.burnin = 400000,
              parameters.to.save = c("theta", "omega", "kappa",
                                     "S0", "R0", "fallback_p",
-                                    "fallback_p_cor"),
+                                    "fallback_p_cor",
+                                    "theta_cor", "omega_cor"),
              n.chains = 3, parallel = T, n.thin = 100,
              inits = function()list(omega =
                                       c(rnorm(1,.47,.01),
@@ -232,9 +236,9 @@ fish_mod_beta3_3g <- jagsUI::jags(data = fish_jags_data,
                                     kappaMinusTwo = c(rnorm(1,25,2),
                                                       rnorm(1,11,2))
              ))
-fish_mod_beta3_3g
-fish_mod <- fish_mod_beta3_3g
-# saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_beta3_3g_030422_all_converged.rds")
+fish_mod_beta3_3h
+fish_mod <- fish_mod_beta3_3h
+# saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_beta3_3h_030622_all_converged.rds")
 
 fish_mod 
 dev.new(); plot(fish_mod)
