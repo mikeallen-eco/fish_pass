@@ -7,10 +7,9 @@ for(s in 1:nfishyears){
 }  
 
 for( c in 1:nfish){
-omega[c] ~ dbeta( omega0*(kappa0-2)+1,
-                  (1-omega0)*(kappa0-2)+1 )
+omega[c] ~ dbeta(1,1)
 kappa[c] <- kappaMinusTwo[c] + 2
-kappaMinusTwo[c] ~ dgamma(S0, R0) # dgamma(.1, .01) 
+kappaMinusTwo[c] ~ dgamma(.1, .01) 
 
 }
 
@@ -22,10 +21,5 @@ fallback_detect[i] ~ dbern(fallback_p)
 # corrected for imperfect detection in the arrays
 fallback_p_cor <- fallback_p / 0.5
 
-omega0 ~ dbeta(1, 1)
-kappa0 <- kappaMinusTwo0 + 2
-kappaMinusTwo0 ~ dgamma(0.1, 0.01) # mean=1, sd = 10
 
-S0 ~ dgamma(0.1, 0.01)
-R0 ~ dgamma(0.1, 0.01)
 }

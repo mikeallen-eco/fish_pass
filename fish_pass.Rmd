@@ -200,11 +200,11 @@ for( c in 1:nfish){
 omega[c] ~ dbeta( omega0*(kappa0-2)+1,
                   (1-omega0)*(kappa0-2)+1 )
 kappa[c] <- kappaMinusTwo[c] + 2
-kappaMinusTwo[c] ~ dgamma(S0, R0) 
+kappaMinusTwo[c] ~ dgamma(S0, R0) # dgamma(.1, .01) 
 
 }
 
-fallback_p ~ dunif(0,1) # dbeta(3,3)
+fallback_p ~ dunif(0,1) 
 for(i in 1:length(fallback_detect)){
 fallback_detect[i] ~ dbern(fallback_p)
 }
@@ -212,7 +212,7 @@ fallback_detect[i] ~ dbern(fallback_p)
 # corrected for imperfect detection in the arrays
 fallback_p_cor <- fallback_p / 0.5
 
-omega0 ~ dbeta(3, 3)
+omega0 ~ dbeta(1, 1)
 kappa0 <- kappaMinusTwo0 + 2
 kappaMinusTwo0 ~ dgamma(0.1, 0.01) # mean=1, sd = 10
 
@@ -221,24 +221,97 @@ R0 ~ dgamma(0.1, 0.01)
 }
 "
 )
+```
+# JAGS model for fish passage proportion
+No hyperparameters for both omega[c] and kappa[c]
+```{r}
 
-fish_mod_beta3_3h <- jagsUI::jags(data = fish_jags_data,
-             model.file = "scripts/fish_mod.txt",
-             n.iter = 500000, n.burnin = 400000,
+cat(file = "scripts/fish_mod_basic.txt",
+"
+model{
+for(s in 1:nfishyears){
+  z[s] ~ dbin(theta[s], N[s])
+  theta[s] ~ dbeta( omega[c[s]]*(kappa[c[s]]-2 )+1 ,
+                    (1-omega[c[s]])*(kappa[c[s]]-2)+1)
+}  
+
+for( c in 1:nfish){
+omega[c] ~ dbeta(1,1)
+kappa[c] <- kappaMinusTwo[c] + 2
+kappaMinusTwo[c] ~ dgamma(.1, .01) 
+
+}
+
+fallback_p ~ dunif(0,1) 
+for(i in 1:length(fallback_detect)){
+fallback_detect[i] ~ dbern(fallback_p)
+}
+
+# corrected for imperfect detection in the arrays
+fallback_p_cor <- fallback_p / 0.5
+
+
+}
+"
+)
+```
+# JAGS model for fish passage proportion
+No hyperparameters, logit-normal
+```{r}
+
+cat(file = "scripts/fish_mod_logit.txt",
+"
+model{
+for(s in 1:nfishyears){
+  z[s] ~ dbin(ilogit(lp[s]), N[s])
+  lp[s] ~ dnorm(mu_logit_p[c[s]], tau_logit_p[c[s]] )
+  logit(p[s]) <- lp[s]
+}  
+
+for( c in 1:nfish){
+mu_logit_p[c] ~ dnorm(0, 0.001)
+tau_logit_p[c] ~ dgamma(0.001, 0.001)
+logit(mu_p[c]) <- mu_logit_p[c]
+}
+
+# fallback_p ~ dunif(0,1) # dbeta(3,3)
+# for(i in 1:length(fallback_detect)){
+# fallback_detect[i] ~ dbern(fallback_p)
+# }
+# 
+# # corrected for imperfect detection in the arrays
+# fallback_p_cor <- fallback_p / 0.5
+
+
+}
+"
+)
+```
+# Run model
+```{r}
+fish_modn <- jagsUI::jags(data = fish_jags_data,
+             model.file = "scripts/fish_mod_basic.txt",
+             n.iter = 600000, n.burnin = 400000,
              parameters.to.save = c("theta", "omega", "kappa",
-                                    "S0", "R0", "fallback_p",
-                                    "fallback_p_cor",
-                                    "theta_cor", "omega_cor"),
-             n.chains = 3, parallel = T, n.thin = 100,
-             inits = function()list(omega =
+                                    "S0", "R0", "p", "mu_p",
+                                    "mu_logit_p", "tau_logit_p",
+                                    "lp",
+                                    "fallback_p",
+                                    "fallback_p_cor"),
+             n.chains = 3, parallel = T, n.thin = 200,
+             inits = function()list(lp = c(rnorm(7,0,0.1),
+                                           rnorm(8,-10,0.1)),
+                                    omega =
                                       c(rnorm(1,.47,.01),
-                                        rnorm(1,.9,.01)),
-                                    kappaMinusTwo = c(rnorm(1,25,2),
-                                                      rnorm(1,11,2))
+                                        rnorm(1,.02,.01)),
+                                    kappaMinusTwo = c(
+                                      rnorm(1,400,2),                                                      rnorm(1,1000,2)),
+                                    S0 = rnorm(1,25,1),
+                                    R0 = rnorm(1,.1,0.01)
              ))
-fish_mod_beta3_3h
-fish_mod <- fish_mod_beta3_3h
-# saveRDS(fish_mod, "other/output/fish_jags_mod_hyperkappa_beta3_3h_030622_all_converged.rds")
+fish_modn
+fish_mod <- fish_modm
+# saveRDS(fish_mod, "other/output/fish_jags_mod_030622m_beta33_nofishhypers_all_converged.rds")
 
 fish_mod 
 dev.new(); plot(fish_mod)
@@ -292,7 +365,7 @@ thetas %>%
             color = "darkgray") +
   annotate("text", x = .94, y = 2019, label = "n =", color = "darkgray")
 
-ggsave("other/figures/successful_jags_run_hyperkappa_beta33_gamma.1_.01_allconverged_run030422.png", 
+ggsave("other/figures/jags_nofishhypers_logit_allconverged_run030622k.png", 
        width = 7, heigh = 5, dpi = 400)
 ```
 
