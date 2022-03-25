@@ -84,6 +84,9 @@ data2014 <- do.call(rbind, file_data_list) %>%
     antenna = case_when(antenna == "A2" ~ "A1",
                         antenna == "A1" ~ "A4",
                         TRUE ~ "unknown")) %>%
+  # to make list of problematic tag numbers do this here
+  # bad_index <- is.na(as.numeric(gsub(data2014$tag, pattern = "_", replacement = "")))
+  # data2014$tag[bad_index]
   #  removing 65 pings with antenna_original == "0" due to unreadable tag #s  
   # 04_18_14.TXT (1 ping), 04_21_14.TXT (6), 05_12_14.TXT (11), 05_13_14.TXT (1)
   # 05_15_14.TXT (15), 05_19_14.TXT (2), 05_21_14.TXT (2), 05_26_14.TXT (4),

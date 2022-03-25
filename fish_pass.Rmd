@@ -34,14 +34,29 @@ tags <- read_xlsx(
                            tz = "America/New_York"))
 
 # video time series
-v_temp <- 
+v_time <- 
   read_xlsx("other/2 IFW Video Data Golden Master 11_2_21.xlsx",
                sheet = "Grouped") %>%
-  select(Date, species = Species) %>%
-  mutate(year = year(Date)) %>%
-  group_by(species, year) %>%
+  select(Date, time = Time, species = Species) %>%
+  mutate(year = year(Date),
+         time = as.numeric(as.character(time))*24,
+         hour = trunc(time),
+         daytime = case_when(time/24 > (7/24) & 
+                               time/24 < (19/24) ~ 1,
+                             TRUE ~ 0)) %>%
+  group_by(species, year, daytime) %>%
   tally() %>%
-  filter(species %in% c("American Shad", "River Herring spp."))
+  filter(species %in% c("American Shad", "River Herring spp.")) %>%
+  arrange(species, year, daytime) %>%
+  group_by(species, year) %>%
+  mutate(pday = n/sum(n))
+# write.csv(v_time, here("output", 
+#                           "proportion_counts_in_daytime.csv"), 
+#           row.names=F)
+
+v_temp <- v_time %>%
+  group_by(species, year) %>%
+  summarise(n = sum(n))
 
 # historic Island Farm Wier Video counts
 shad_hist <- data.frame(species = "American Shad",
@@ -184,79 +199,7 @@ Need to be checked by Anthony.
 # source("scripts/save_diagnostics.R")
 ```
 # JAGS model for fish passage proportion
-Hyperparameters for both omega[c] and kappa[c]
-```{r}
-
-cat(file = "scripts/fish_mod.txt",
-"
-model{
-for(s in 1:nfishyears){
-  z[s] ~ dbin(theta[s], N[s])
-  theta[s] ~ dbeta( omega[c[s]]*(kappa[c[s]]-2 )+1 ,
-                    (1-omega[c[s]])*(kappa[c[s]]-2)+1)
-}  
-
-for( c in 1:nfish){
-omega[c] ~ dbeta( omega0*(kappa0-2)+1,
-                  (1-omega0)*(kappa0-2)+1 )
-kappa[c] <- kappaMinusTwo[c] + 2
-kappaMinusTwo[c] ~ dgamma(S0, R0) # dgamma(.1, .01) 
-
-}
-
-fallback_p ~ dunif(0,1) 
-for(i in 1:length(fallback_detect)){
-fallback_detect[i] ~ dbern(fallback_p)
-}
-
-# corrected for imperfect detection in the arrays
-fallback_p_cor <- fallback_p / 0.5
-
-omega0 ~ dbeta(1, 1)
-kappa0 <- kappaMinusTwo0 + 2
-kappaMinusTwo0 ~ dgamma(0.1, 0.01) # mean=1, sd = 10
-
-S0 ~ dgamma(0.1, 0.01)
-R0 ~ dgamma(0.1, 0.01)
-}
-"
-)
-```
-# JAGS model for fish passage proportion
-No hyperparameters for both omega[c] and kappa[c]
-```{r}
-
-cat(file = "scripts/fish_mod_basic.txt",
-"
-model{
-for(s in 1:nfishyears){
-  z[s] ~ dbin(theta[s], N[s])
-  theta[s] ~ dbeta( omega[c[s]]*(kappa[c[s]]-2 )+1 ,
-                    (1-omega[c[s]])*(kappa[c[s]]-2)+1)
-}  
-
-for( c in 1:nfish){
-omega[c] ~ dbeta(1,1)
-kappa[c] <- kappaMinusTwo[c] + 2
-kappaMinusTwo[c] ~ dgamma(.1, .01) 
-
-}
-
-fallback_p ~ dunif(0,1) 
-for(i in 1:length(fallback_detect)){
-fallback_detect[i] ~ dbern(fallback_p)
-}
-
-# corrected for imperfect detection in the arrays
-fallback_p_cor <- fallback_p / 0.5
-
-
-}
-"
-)
-```
-# JAGS model for fish passage proportion
-No hyperparameters, logit-normal
+logit-normal with hyperparameter for each fish
 ```{r}
 
 cat(file = "scripts/fish_mod_logit.txt",
@@ -274,13 +217,13 @@ tau_logit_p[c] ~ dgamma(0.001, 0.001)
 logit(mu_p[c]) <- mu_logit_p[c]
 }
 
-# fallback_p ~ dunif(0,1) # dbeta(3,3)
-# for(i in 1:length(fallback_detect)){
-# fallback_detect[i] ~ dbern(fallback_p)
-# }
-# 
-# # corrected for imperfect detection in the arrays
-# fallback_p_cor <- fallback_p / 0.5
+fallback_p ~ dunif(0,1) # dbeta(3,3)
+for(i in 1:length(fallback_detect)){
+fallback_detect[i] ~ dbern(fallback_p)
+}
+
+# corrected for imperfect detection in the arrays
+fallback_p_cor <- fallback_p / 0.5
 
 
 }
@@ -289,104 +232,172 @@ logit(mu_p[c]) <- mu_logit_p[c]
 ```
 # Run model
 ```{r}
-fish_modn <- jagsUI::jags(data = fish_jags_data,
-             model.file = "scripts/fish_mod_basic.txt",
-             n.iter = 600000, n.burnin = 400000,
-             parameters.to.save = c("theta", "omega", "kappa",
-                                    "S0", "R0", "p", "mu_p",
-                                    "mu_logit_p", "tau_logit_p",
-                                    "lp",
-                                    "fallback_p",
-                                    "fallback_p_cor"),
-             n.chains = 3, parallel = T, n.thin = 200,
-             inits = function()list(lp = c(rnorm(7,0,0.1),
-                                           rnorm(8,-10,0.1)),
-                                    omega =
-                                      c(rnorm(1,.47,.01),
-                                        rnorm(1,.02,.01)),
-                                    kappaMinusTwo = c(
-                                      rnorm(1,400,2),                                                      rnorm(1,1000,2)),
-                                    S0 = rnorm(1,25,1),
-                                    R0 = rnorm(1,.1,0.01)
-             ))
-fish_modn
-fish_mod <- fish_modm
-# saveRDS(fish_mod, "other/output/fish_jags_mod_030622m_beta33_nofishhypers_all_converged.rds")
+fish_modn <- jagsUI::jags(
+  data = fish_jags_data,
+  model.file = "scripts/fish_mod_logit.txt",
+  n.iter = 600000,
+  n.burnin = 400000,
+  parameters.to.save = c(
+    "theta",
+    "omega",
+    "kappa",
+    "S0",
+    "R0",
+    "p",
+    "mu_p",
+    "mu_logit_p",
+    "tau_logit_p",
+    "lp",
+    "fallback_p",
+    "fallback_p_cor"
+  ),
+  n.chains = 3,
+  parallel = T,
+  n.thin = 200,
+  inits = function()
+    list(
+      lp = c(rnorm(7, 0, 0.1),
+             rnorm(8, -10, 0.1)),
+      omega =
+        c(rnorm(1, .47, .01),
+          rnorm(1, .02, .01)),
+      kappaMinusTwo = c(rnorm(1, 400, 2),                                                      rnorm(1, 1000, 2)),
+      S0 = rnorm(1, 25, 1),
+      R0 = rnorm(1, .1, 0.01)
+    )
+)
+fish_mod
+# saveRDS(fish_mod, "other/output/fish_jags_mod_030622k_logit_all_converged.rds")
+```
+# Plot model output - logit, 030622k
+```{r}
+fish_mod <- readRDS(here(
+  "other",
+  "output",
+  "fish_jags_mod_030622k_logit_all_converged.rds"
+))
 
-fish_mod 
-dev.new(); plot(fish_mod)
-thetas <- tidybayes::gather_draws(fish_mod, theta[i]) %>%
+dev.new()
+plot(fish_mod)
+thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
   group_by(i) %>%
-  summarise(theta_mean = mean(.value),
-            theta_q2.5 = quantile(.value, .025),
-            theta_q97.5 = quantile(.value, .975),
-            theta_q10 = quantile(.value, .1),
-            theta_q90 = quantile(.value, .9)) %>%
-  mutate(year = c(2012:2017,2019,2012:2019),
+  summarise(
+    theta_mean = mean(.value),
+    theta_q2.5 = quantile(.value, .025),
+    theta_q97.5 = quantile(.value, .975),
+    theta_q10 = quantile(.value, .1),
+    theta_q90 = quantile(.value, .9)
+  ) %>%
+  mutate(year = c(2012:2017, 2019, 2012:2019),
          species = c(rep("American Shad", 7), rep("Herring spp.", 8))) %>%
-  left_join(raw_sum) 
+  left_join(raw_sum)
 
-omegas <- tidybayes::gather_draws(fish_mod, omega[i]) %>%
+omegas <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
   group_by(i) %>%
-  summarise(omega_mean = mean(.value),
-            omega_q2.5 = quantile(.value, .025),
-            omega_q97.5 = quantile(.value, .975),
-            omega_q10 = quantile(.value, .1),
-            omega_q90 = quantile(.value, .9)) %>%
+  summarise(
+    omega_mean = mean(.value),
+    omega_q2.5 = quantile(.value, .025),
+    omega_q97.5 = quantile(.value, .975),
+    omega_q10 = quantile(.value, .1),
+    omega_q90 = quantile(.value, .9)
+  ) %>%
   mutate(species = c("American Shad", "Herring spp."))
 
 
 thetas %>%
   ggplot() +
-    geom_vline(data = omegas, aes(xintercept = omega_mean), size = 0.5,
-             color = "red") +
-      geom_vline(data = omegas, aes(xintercept = omega_q2.5), size = 0.5,
-             color = "red", lty = 2) +
-        geom_vline(data = omegas, aes(xintercept = omega_q97.5), size = 0.5,
-             color = "red", lty = 2) +
+  geom_vline(
+    data = omegas,
+    aes(xintercept = omega_mean),
+    size = 0.5,
+    color = "red"
+  ) +
+  geom_vline(
+    data = omegas,
+    aes(xintercept = omega_q2.5),
+    size = 0.5,
+    color = "red",
+    lty = 2
+  ) +
+  geom_vline(
+    data = omegas,
+    aes(xintercept = omega_q97.5),
+    size = 0.5,
+    color = "red",
+    lty = 2
+  ) +
   geom_errorbar(aes(xmin = theta_q2.5,
                     xmax = theta_q97.5,
                     y = year), width = 0) +
   geom_errorbar(aes(xmin = theta_q10,
                     xmax = theta_q90,
-                    y = year), size = 1, width = 0) +
+                    y = year),
+                size = 1,
+                width = 0) +
   geom_point(aes(x = theta_mean,
                  y = year), size = 4) +
-  facet_wrap(~species) +
-  scale_x_continuous(limits = c(0,1.1),
-                     breaks = seq(0,1,0.2)) +
+  facet_wrap( ~ species) +
+  scale_x_continuous(limits = c(0, 1.1),
+                     breaks = seq(0, 1, 0.2)) +
   scale_y_continuous(breaks = 2012:2019) +
   theme_bw() +
   theme(text = element_text(size = 14)) +
   labs(y = "", x = "Passage rate") +
-  geom_point(aes(x = prop, y = year), shape = "x", 
-            color = "red", size = 4) +
-  geom_text(aes(x = 1, y = year, label = trials.x), nudge_x = .04,
+  geom_point(aes(x = prop, y = year),
+             shape = "x",
+             color = "red",
+             size = 4) +
+  geom_text(aes(x = 1, y = year, label = trials.x),
+            nudge_x = .04,
             color = "darkgray") +
-  annotate("text", x = .94, y = 2019, label = "n =", color = "darkgray")
+  annotate(
+    "text",
+    x = .94,
+    y = 2019,
+    label = "n =",
+    color = "darkgray"
+  )
 
-ggsave("other/figures/jags_nofishhypers_logit_allconverged_run030622k.png", 
-       width = 7, heigh = 5, dpi = 400)
+ggsave(
+  "other/figures/jags_nofishhypers_logit_allconverged_run030622k.png",
+  width = 7,
+  heigh = 5,
+  dpi = 400
+)
 ```
+
 
 # Video time series 
 ```{r}
-
 # Match up year time series with 
-fish_mod <- readRDS("other/output/fish_jags_mod_hyperkappa_beta3_3g_030422_all_converged.rds")
-fish_mod
+fish_mod <- readRDS(here("other",
+                         "output",
+                     "fish_jags_mod_030622k_logit_all_converged.rds"
+                         ))
+
+# need to load this previous model as fallback parameter wasn't saved in other model
+fish_mod2 <- readRDS("other/output/fish_jags_mod_030622m_beta33_nofishhypers_all_converged.rds")
+
+fallback_vector <- tidybayes::gather_draws(fish_mod2, fallback_p_cor)$.value
 
 # collect all theta posterior draws and add fish/year info
-theta_draws <- tidybayes::gather_draws(fish_mod, theta[i]) %>%
+theta_draws <- tidybayes::gather_draws(fish_mod, p[i]) %>%
   left_join(data.frame(i = 1:15, 
                        year = c(2012:2017,2019,2012:2019))) %>%
   ungroup() %>%
   mutate(species = c(rep("American Shad", 21000), 
-                     rep("River Herring spp.", 24000))) 
+                     rep("River Herring spp.", 24000)),
+         fallback = rep(fallback_vector, 15),
+         pass_cor = .value/fallback,
+         pass_cor2 = .value/.47) 
+
+boxplot(theta_draws$pass_cor~theta_draws$i)
+boxplot(theta_draws$pass_cor2~theta_draws$i)
+boxplot(theta_draws$.value~theta_draws$i)
 
 # collect omega (fish average) passage rate draws & add fish/year
 # (just Shad in 2018 as that is the year with no passage info)
-omega_draws_temp <- tidybayes::gather_draws(fish_mod, omega[i]) %>%
+omega_draws_temp <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
   filter(i == 1)
 
 omega_draws_temp_shad <- mutate(omega_draws_temp, 
@@ -401,7 +412,10 @@ omega_draws_temp_shad <- mutate(omega_draws_temp,
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[9])) %>%
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
   bind_rows(mutate(omega_draws_temp, year = 2018)) %>%
-  mutate(species = "American Shad")
+  mutate(species = "American Shad",
+         fallback = rep(fallback_vector, 11),
+         pass_cor = .value/fallback,
+         pass_cor2 = .value/.47)
 
 omega_draws_temp_herring <- mutate(omega_draws_temp, 
                       year = shad_hist$year[1]) %>%
@@ -414,7 +428,10 @@ omega_draws_temp_herring <- mutate(omega_draws_temp,
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[8])) %>%
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[9])) %>%
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
-  mutate(species = "River Herring spp.")
+  mutate(species = "River Herring spp.",
+         fallback = rep(fallback_vector, 10),
+         pass_cor = .value/fallback,
+         pass_cor2 = .value/.47)
 
 omega_draws <- omega_draws_temp_shad %>%
   bind_rows(omega_draws_temp_herring)
@@ -431,13 +448,15 @@ fish_n_draws <- theta_draws %>%
   # join with video count data
   left_join(v) %>%
   filter(is.na(n) != TRUE) %>% # remove years with no counts
-  arrange(species, year)
+  arrange(species, year) %>%
+  mutate(pass_cor_trunc = ifelse(pass_cor >=1, 1, pass_cor),
+         pass_cor2_trunc = ifelse(pass_cor2 >= 1, 1, pass_cor2))
 
 # create corrected n and summarize draws
 fish_n <- fish_n_draws %>%
-  mutate(nhat = n / .value) %>%
+  mutate(nhat = n / pass_cor_trunc) %>%
   group_by(species, year) %>%
-  summarise(nhat_mean = mean(nhat),
+  summarise(nhat_med = median(nhat),
             nhat_q2.5 = quantile(nhat, .025),
             nhat_q97.5 = quantile(nhat, .975),
             nhat_q10 = quantile(nhat, .1),
@@ -447,7 +466,7 @@ fish_n <- fish_n_draws %>%
   bind_rows(data.frame(species = c("American Shad",
                                     "River Herring spp."),
                         year = rep(c(2000, 2004, 2006:2012),2),
-                        nhat_mean = NA,
+                        nhat_med = NA,
                         nhat_q2.5 = NA,
                         nhat_q97.5 = NA,
                         nhat_q10 = NA,
@@ -457,56 +476,48 @@ fish_n <- fish_n_draws %>%
 
 # plot nhat by species and year with credible intervals
 fish_n %>%
+  filter(species == "American Shad",
+         year >= 2013) %>%
   ggplot() +
-  # geom_ribbon(aes(x = year, ymin = nhat_q2.5, 
-  #                 ymax = nhat_q97.5),
-  #             alpha = 0.5, fill = "steelblue") +
-  geom_line(aes(x = year, y = nhat_mean+1),
-            color = "dodgerblue", size = .5) +
-  # geom_line(aes(x = year, y = n+1), size = 0.5, lty = 2, 
-  #           color = "darkgray") +
-  geom_point(aes(x = year, y = nhat_mean+1),
-             color = "dodgerblue", size = 2) +
-  geom_errorbar(aes(x = year, ymin = nhat_q2.5, 
-                  ymax = nhat_q97.5),
-              alpha = 1, color = "dodgerblue",
-              width = 0.5) +
-  facet_wrap(~species) +
+  geom_ribbon(aes(x = year, ymin = nhat_q2.5+1,
+                  ymax = nhat_q97.5+1),
+              alpha = 0.25, fill = "steelblue") +
+  geom_ribbon(aes(x = year, ymin = nhat_q10,
+                  ymax = nhat_q90),
+              alpha = 0.25, fill = "steelblue") +
+  geom_line(aes(x = year, y = nhat_med+1),
+            color = "steelblue", size = .5) +
+  geom_line(aes(x = year, y = n+1), size = 0.5, lty = 2,
+            color = "steelblue") +
+  geom_line(aes(x = year, y = n+1), size = 0.5, lty = 2,
+            color = "darkgreen", 
+            data = filter(fish_n, 
+                          species == "River Herring spp.",
+                          year >= 2013)) +
+  geom_point(aes(x = year, y = nhat_med+1),
+             color = "steelblue", size = 3) +
+  geom_errorbar(aes(x = year, ymin = nhat_q2.5+1, 
+                  ymax = nhat_q97.5+1),
+              alpha = 1, color = "steelblue",
+              width = 0) +
+  geom_errorbar(aes(x = year, ymin = nhat_q10+1, 
+                  ymax = nhat_q90+1),
+              alpha = 1, color = "steelblue",
+              width = 0, size = 1.5) +
+  # facet_wrap(~species) +
   scale_y_log10() +
+  scale_x_continuous(breaks = c(2013:2019)) +
   theme_bw() +  
   theme(text = element_text(size = 14)) +
   theme(strip.background = element_rect(fill="white")) +
-  labs(x = "", y = "Estimated run size (n)")
-ggsave("other/figures/run_size_passage_corrected_points_run030322.png",
-       height = 4, width = 7,
-       dpi = 400)
-
-# same using line and ribbon
-# plot nhat by species and year with credible intervals
-fish_n %>%
-  ggplot() +
-  geom_ribbon(aes(x = year, ymin = nhat_q2.5,
-                  ymax = nhat_q97.5),
-              alpha = 0.5, fill = "steelblue") +
-  geom_line(aes(x = year, y = nhat_mean+1),
-            color = "dodgerblue", size = 1) +
-  # geom_line(aes(x = year, y = n+1), size = 0.5, lty = 2,
-  #           color = "darkgray") +
-  geom_point(aes(x = year, y = nhat_mean+1),
-             color = "dodgerblue", size = 2, 
-              data = filter(fish_n, year == 2005)) +
-  geom_errorbar(aes(x = year, ymin = nhat_q2.5,
-                  ymax = nhat_q97.5),
-              alpha = 1, color = "dodgerblue",
-              width = 0.5, 
-              data = filter(fish_n, year == 2005)) +
-  facet_wrap(~species) +
-  scale_y_log10() +
-  theme_bw() +  
-  theme(text = element_text(size = 14)) +
-  theme(strip.background = element_rect(fill="white")) +
-  labs(x = "", y = "Estimated run size (n)")
-ggsave("other/figures/run_size_passage_corrected_lines_run030322b.png",
+  labs(x = "", y = "Run size (n)") +
+  annotate(geom = "text", x = 2013, y = 225, 
+           label = "Shad", color = "steelblue", 
+           alpha = 0.75, hjust = 0, size = 4) +
+  annotate(geom = "text", x = 2013, y = 30, 
+           label = "Herring", color = "darkgreen", 
+           alpha = 0.75, hjust = 0, size = 4)
+ggsave("other/figures/run_size_passage_cor_uncertainfallback_run030622k_logit.png",
        height = 4, width = 7,
        dpi = 400)
 
@@ -515,38 +526,64 @@ ggsave("other/figures/run_size_passage_corrected_lines_run030322b.png",
 Warning: data are wrong at the moment until antennas are sorted out.
 ```{r}
 fish_sum_plot = fish_sum %>%
-  mutate(sp_cat = case_when(Common.Name %in% 
+  mutate(sp_cat = case_when(species %in% 
                               c("Blueback Herring", 
                                 "River Herring",
                                 "Alewife") ~
                               "River Herring spp.",
-                            Common.Name == "American Shad" ~
+                            species == "American Shad" ~
                               "American Shad",
                             TRUE ~ "NA")) %>%
   filter(sp_cat != "NA") %>%
   select(sp_cat, ends_with("days")) %>%
   pivot_longer(cols = ends_with("days")) %>%
-  mutate(order = case_when(name == "attraction.days" ~ 1,
+  filter(is.na(value) == FALSE) %>%
+  mutate(value = abs(value), # this addresses one -0.0003 time 
+         order = case_when(name == "attraction.days" ~ 1,
                            name == "staging.days" ~ 2,
-                           name == "passage.days" ~ 3),
-         name = forcats::fct_reorder(name, order))
+                           name == "passage.days" ~ 4,
+                           TRUE ~ 3),
+         name = forcats::fct_reorder(name, order),
+         metric = case_when(name == "attraction.days" ~ 
+                              "Attraction time",
+                           name == "staging.days" ~ 
+                             "Staging time",
+                           name == "passage.days" ~ 
+                             "Total passage time",
+                           name == "transit.days" ~ 
+                             "Transit time"),
+         value2 = case_when(name == "transit.days" ~ log10(value),
+                            name == "staging.days" ~ log10(value),
+                            name == "passage.days" ~ log10(value),
+                            TRUE ~ value),
+         metric = forcats::fct_reorder(metric, order)) 
 
 fish_sum_plot %>%
-  filter(value>=1,
-         value < 300) %>%
+  filter(value < 300) %>% # sp_cat == "American Shad"
 ggplot() +
-  geom_boxplot(aes(x = sp_cat, y = value, fill = sp_cat)) +
-  facet_wrap(~name) +
+  geom_violin(aes(x = sp_cat, # or geom_boxplot
+                  y = value+.001, 
+                  fill = sp_cat),
+              draw_quantiles = c(0.5),
+              fill = "transparent",
+              color = "darkgray") +
+  geom_point(aes(x = sp_cat, y = value+0.001, color = sp_cat),
+             size = 3, alpha = .25) +
+  facet_wrap(~metric, scales = "free") +
   theme_bw() + 
   labs(x = "", y = "Days", fill = "") +
+  scale_y_log10(breaks = c(0.01,0.1, 1, 10)) +
   theme(text = element_text(size = 14),
-        axis.text.x = element_blank(),
-        legend.position = "bottom") +
-  scale_fill_manual(values = c("steelblue", "darkgreen"))
+        # axis.text.x = element_blank(),
+        legend.position = "none",
+        strip.background = element_rect(fill = "white")) +
+  scale_fill_manual(values = c("steelblue", "darkgreen")) +
+  scale_color_manual(values = c("steelblue", "darkgreen"))
+  
 
-# ggsave("other/figures/transit_time_wrong.png",
-#        height = 4, width = 7,
-#        dpi = 400)
+ggsave("other/figures/passage_time_violin.png",
+       height = 4, width = 7,
+       dpi = 400)
 ```
 
 
