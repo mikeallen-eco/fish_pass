@@ -147,3 +147,69 @@ plot_by_antenna_day(data2019)
 rm(fish2019_sum1, fish2018_sum1, fish2017_sum1, fish2016_sum1,
    fish2015_sum1, fish2014_sum1, fish2013_sum1, 
    fish2012_sum1, pings_predate_tagging)
+
+##############################
+### Calculate the days / % of season operational for each antenna
+##############################
+
+# make a function to do so
+days_active <- function(ping_data, the_year){
+  
+  # find first tagging day that year
+  first_day <- tags %>% 
+    mutate(year = year(tag_time),
+           jul = yday(tag_time)) %>%
+    group_by(year) %>%
+    summarise(first_day = min(jul)) %>%
+    mutate(date = c("Apr 27", "Apr 26", "Apr 14", "Apr 13", 
+                    "Apr 6", "Apr 12", "Apr 10", "Apr 10"))
+  
+  first_day_number <- filter(first_day, year == the_year)$first_day
+  first_day_label <- filter(first_day, year == the_year)$date
+  
+  days_active_data <- ping_data %>%
+    mutate(day = yday(datetime)) %>%
+    group_by(day, antenna) %>%
+    tally() %>%
+    arrange(antenna, day) %>%
+    filter(day >= first_day_number) %>%
+    ungroup()
+  
+  last_day_number <- max(days_active_data$day)
+  
+  days_active_tally <- days_active_data %>%
+    mutate(year = the_year,
+           first_day_date = first_day_label,
+           first_day = first_day_number,
+           last_day = last_day_number,
+           season_length = last_day - first_day) %>%
+    group_by(year, antenna, first_day_date, first_day, last_day, season_length) %>%
+    summarise(days_96 = sum(n >= 96),
+              days_86 = sum(n >= 86),
+              days_72 = sum(n >= 72),
+              days_any = length(n),
+              .groups = "drop") %>%
+    mutate(pct_96 = round(100*days_96/season_length, 1),
+           pct_86 = round(100*days_86/season_length, 1),
+           pct_72 = round(100*days_72/season_length, 1),
+           pct_any = round(100*days_any/season_length, 1)
+    )
+  
+  return(days_active_tally)
+}
+
+days_active_df <- days_active(data2012, 2012) %>%
+  bind_rows(days_active(data2013, 2013),
+            days_active(data2014, 2014),
+            days_active(data2015, 2015),
+            days_active(data2016, 2016),
+            days_active(data2017, 2017),
+            days_active(data2018, 2018),
+            days_active(data2019, 2019))
+
+write.csv(days_active_df,
+          here("output",
+               "antenna_days_active.csv"), 
+          row.names=F)
+
+rm(days_active_df)
