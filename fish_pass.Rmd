@@ -780,3 +780,44 @@ ggsave("figures/stairstep.png", width = 7, height = 5, dpi = 400)
 
 ```
 
+# Histogram of fish counts by hour
+```{r}
+# video time series
+v_time_hist <- 
+  read_xlsx("other/2 IFW Video Data Golden Master 11_2_21.xlsx",
+               sheet = "Grouped") %>%
+  select(Date, time = Time, species = Species) %>%
+  mutate(year = year(Date),
+         # note: time read in as decimal hours (a prop. of 24 hr)
+         time = as.numeric(as.character(time))*24,
+         hour = trunc(time),
+         y2013 = case_when(year == 2013 ~ "2013",
+                                  TRUE ~ "2014-2019")) %>%
+  filter(species %in% c("American Shad", "River Herring spp.")) %>%
+  arrange(species, time)
+
+
+v_time_hist %>%
+  group_by(species, y2013, hour) %>%
+  summarize(n = length(hour),
+            .groups = "drop") %>%
+  group_by(species, y2013) %>%
+  mutate(p = n/sum(n)) %>%
+  ggplot() +
+  geom_col(aes(x = hour, y=p),
+                 binwidth = 1, 
+                 color = "darkgray",
+                 closed = "left",
+                 breaks = c(0:24)) +
+  facet_grid(y2013~species) +
+  theme_bw() +
+  theme(text = element_text(size = 14),
+        strip.background = element_rect(fill = "white")) +
+  labs(x = "Hour", y = "Proportion of individuals")
+
+ggsave("figures/fish_counts_by_hour_histograms.png", 
+       width = 7, height = 4, dpi = 400)
+ 
+
+```
+
