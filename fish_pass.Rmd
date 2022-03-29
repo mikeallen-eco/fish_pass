@@ -708,5 +708,75 @@ fish_sum_sum_y2 <- fish_sum %>%
   filter(attraction.days >= 300,
          grepl(species, pattern = "Herring|American Shad"))
 
+```
+
+# Stairstep figure
+```{r}
+
+stairs <- fish_sum %>%
+  filter(species %in% c("American Shad", "Blueback Herring")) %>%
+  mutate(farthest = case_when(!is.na(n_A4) ~ 4,
+                              !is.na(n_A3) & is.na(n_A4) ~ 3,
+                              !is.na(n_A2) & is.na(n_A3) &
+                                is.na(n_A4) ~ 2,
+                              is.na(n_A2) & is.na(n_A3) &
+                                is.na(n_A4) ~ 1)
+                              ) %>%
+  right_join(tags) %>%
+  filter(grepl(Common.Name, 
+               pattern = "Herring|American Shad|Alewife")) %>%
+  mutate(sp = case_when(grepl(Common.Name, 
+                                   pattern = "Herring|Alewife") ~
+                               "River Herring",
+                        grepl(Common.Name, 
+                                   pattern = "American Shad") ~
+                               "American Shad",
+                        grepl(species, 
+                                   pattern = "Herring|Alewife") ~
+                               "River Herring",
+                        grepl(species, 
+                                   pattern = "American Shad") ~
+                               "American Shad"),
+         farthest = replace_na(farthest, 0) + 1,
+         farthest2 = case_when(farthest %in% 2:4 ~ 2, 
+                               farthest == 5 ~ 3,
+                               TRUE ~ 1)) %>%
+  mutate(tag_year = year(tag_time),
+         far_tag = ifelse(farthest2 == 1, 1, 0),
+         far_weir = ifelse(farthest2 == 2, 1, 0),
+         far_pass = ifelse(farthest2 == 3, 1, 0)) %>%
+  select(detect_year, tag_year, 
+         tag_short, tag_time, sp,starts_with("n_"), 
+         far_tag, far_weir, far_pass) %>%
+  arrange(sp, far_tag, far_weir, far_pass)
+                        
+
+stairs %>%
+  group_by(sp) %>%
+  summarise(far_tag = mean(far_tag),
+            far_weir = mean(far_weir),
+            far_pass = mean(far_pass)) %>%
+  mutate(tag_c = far_tag + far_weir + far_pass,
+         weir_c = far_weir + far_pass,
+         pass_c = far_pass) %>%
+  select(sp, ends_with("_c")) %>%
+  pivot_longer(cols = 2:4, values_to = "p") %>%
+  mutate(stage = c(1,2,3,1,2,3),
+         stage2 = rep(c("Tagged", 
+                        "Reached\nladder", 
+                        "Passed\nladder"), 2),
+         n = p*c(51, 51, 51, 162, 162, 162),
+         stage2 = forcats::fct_reorder(stage2, stage)) %>%
+  ggplot() +
+  geom_col(aes(x = stage2, y = n),
+           position = position_dodge(width = 1)) +
+  facet_wrap(~ sp, scales = "free") +
+  theme_bw() +
+  theme(text = element_text(size = 14),
+        strip.background = element_rect(fill = "white")) +
+  labs(x = "", y = "Number of individuals")
+
+ggsave("figures/stairstep.png", width = 7, height = 5, dpi = 400)
 
 ```
+
