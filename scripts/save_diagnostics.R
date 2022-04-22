@@ -102,47 +102,6 @@ write.csv(pings_predate_tagging, here("output",
           row.names=F)
 
 
-# Function to plot # pings/day by antenna to check antenna coverage
-# make a function to plot pings/day by antenna for a given year
-plot_by_antenna_day <- function(ping_data){
-  plot_data <- ping_data %>%
-    mutate(day = yday(datetime)) %>%
-    group_by(day, antenna) %>%
-    tally() %>%
-    arrange(day) #%>%
-
-  antenna_plot <- ggplot(plot_data) +
-    geom_col(aes(x = day, y = n)) +
-    facet_wrap(~antenna) +
-    theme_bw() +
-    scale_x_continuous(limits = c(min(filter(plot_data,n!=0)$day),
-                                  max(filter(plot_data,n!=0)$day)),
-                       breaks = c(32, 60, 91, 121, 152, 
-                                  182, 213, 244, 274),
-                       labels = c("Feb", "", "Apr", "", "Jun", 
-                                  "", "Aug", "", "Oct")) +
-    scale_y_log10() +
-    theme(text = element_text(size = 15)) +
-      labs(y = "No. pings / day", x = "",
-           title = as.character(year(ping_data$date[1])))
-  
- ggsave(here("figures", paste0(stringr::str_sub(year(ping_data$date[1])), 
-                                "_antenna_pings_per_day.png")), 
-         height = 4, width = 7, dpi = 400)
-  
-  return(antenna_plot)
-}
-
-# Plot pings/day by antenna to check antenna coverage
-plot_by_antenna_day(data2012)
-plot_by_antenna_day(data2013)
-plot_by_antenna_day(data2014)
-plot_by_antenna_day(data2015)
-plot_by_antenna_day(data2016)
-plot_by_antenna_day(data2017)
-plot_by_antenna_day(data2018)
-plot_by_antenna_day(data2019)
-
 # remove unneeded objects
 rm(fish2019_sum1, fish2018_sum1, fish2017_sum1, fish2016_sum1,
    fish2015_sum1, fish2014_sum1, fish2013_sum1, 

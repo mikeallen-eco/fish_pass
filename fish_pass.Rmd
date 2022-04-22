@@ -278,8 +278,8 @@ fish_mod <- readRDS(here(
   "fish_jags_mod_030622k_logit_all_converged.rds"
 ))
 
-dev.new()
-plot(fish_mod)
+# dev.new()
+# plot(fish_mod)
 thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
   group_by(i) %>%
   summarise(
@@ -337,8 +337,8 @@ thetas %>%
                 width = 0) +
   geom_point(aes(x = theta_mean,
                  y = year), size = 4) +
-  facet_wrap( ~ species) +
-  scale_x_continuous(limits = c(0, 1.1),
+  facet_wrap( ~ species, scales = "free") +
+  scale_x_continuous(#limits = c(0, 1.1),
                      breaks = seq(0, 1, 0.2)) +
   scale_y_continuous(breaks = 2012:2019) +
   theme_bw() +
@@ -359,12 +359,12 @@ thetas %>%
     color = "darkgray"
   )
 
-ggsave(
-  "other/figures/jags_nofishhypers_logit_allconverged_run030622k.png",
-  width = 7,
-  heigh = 5,
-  dpi = 400
-)
+# ggsave(
+#   "other/figures/jags_nofishhypers_logit_allconverged_run030622k.png",
+#   width = 7,
+#   heigh = 5,
+#   dpi = 400
+# )
 ```
 
 
@@ -389,7 +389,10 @@ theta_draws <- tidybayes::gather_draws(fish_mod, p[i]) %>%
   mutate(species = c(rep("American Shad", 21000), 
                      rep("River Herring spp.", 24000)),
          fallback = rep(fallback_vector, 15),
-         pass_cor = .value/fallback,
+         pass_cor = case_when(species == "American Shad" ~
+                                .value,
+                              species == "River Herring spp." ~
+                                .value/fallback),
          pass_cor2 = .value/.47) 
 
 boxplot(theta_draws$pass_cor~theta_draws$i)
@@ -415,7 +418,7 @@ omega_draws_temp_shad <- mutate(omega_draws_temp,
   bind_rows(mutate(omega_draws_temp, year = 2018)) %>%
   mutate(species = "American Shad",
          fallback = rep(fallback_vector, 11),
-         pass_cor = .value/fallback,
+         pass_cor = .value,
          pass_cor2 = .value/.47)
 
 omega_draws_temp_herring <- mutate(omega_draws_temp, 
@@ -473,52 +476,52 @@ fish_n <- fish_n_draws %>%
                         nhat_q10 = NA,
                         nhat_q90 = NA,
                         n = NA)) %>%
-  arrange(species, year)
+  arrange(species, year) %>%
+  mutate(nhat_q90 = 
+           case_when(species == "River Herring spp." ~
+                                nhat_med,
+                              TRUE ~ nhat_q90),
+         nhat_q97.5 = 
+           case_when(species == "River Herring spp." ~
+                                nhat_med,
+                              TRUE ~ nhat_q97.5))
 
 # plot nhat by species and year with credible intervals
 fish_n %>%
-  filter(species == "American Shad",
-         year >= 2013) %>%
+  filter(year >= 2013) %>%
   ggplot() +
-  geom_ribbon(aes(x = year, ymin = nhat_q2.5+1,
-                  ymax = nhat_q97.5+1),
-              alpha = 0.25, fill = "steelblue") +
+  geom_ribbon(aes(x = year, ymin = nhat_q2.5,
+                  ymax = nhat_q97.5, fill = species),
+              alpha = 0.25) +
   geom_ribbon(aes(x = year, ymin = nhat_q10,
-                  ymax = nhat_q90),
-              alpha = 0.25, fill = "steelblue") +
-  geom_line(aes(x = year, y = nhat_med+1),
-            color = "steelblue", size = .5) +
-  geom_line(aes(x = year, y = n+1), size = 0.5, lty = 2,
-            color = "steelblue") +
-  geom_line(aes(x = year, y = n+1), size = 0.5, lty = 2,
-            color = "darkgreen", 
-            data = filter(fish_n, 
-                          species == "River Herring spp.",
-                          year >= 2013)) +
-  geom_point(aes(x = year, y = nhat_med+1),
-             color = "steelblue", size = 3) +
-  geom_errorbar(aes(x = year, ymin = nhat_q2.5+1, 
-                  ymax = nhat_q97.5+1),
-              alpha = 1, color = "steelblue",
+                  ymax = nhat_q90, fill = species),
+              alpha = 0.25) +
+  geom_line(aes(x = year, y = nhat_med, color = species),
+            size = .5) +
+  geom_line(aes(x = year, y = n, color = species), 
+            size = 0.5, lty = 2) +
+  geom_point(aes(x = year, y = nhat_med, color = species),
+             size = 3) +
+  geom_errorbar(aes(x = year, ymin = nhat_q2.5, 
+                  ymax = nhat_q97.5, color = species),
+              alpha = 1,
               width = 0) +
-  geom_errorbar(aes(x = year, ymin = nhat_q10+1, 
-                  ymax = nhat_q90+1),
-              alpha = 1, color = "steelblue",
+  geom_errorbar(aes(x = year, ymin = nhat_q10, 
+                  ymax = nhat_q90, color = species),
+              alpha = 1,
               width = 0, size = 1.5) +
-  # facet_wrap(~species) +
+  scale_fill_manual(values = c("steelblue", "steelblue")) +
+  scale_color_manual(values = c("steelblue", "steelblue")) +
+  facet_wrap(~species) +
   scale_y_log10() +
+  guides(fill = "none", color = "none") +
   scale_x_continuous(breaks = c(2013:2019)) +
   theme_bw() +  
   theme(text = element_text(size = 14)) +
   theme(strip.background = element_rect(fill="white")) +
-  labs(x = "", y = "Run size (n)") +
-  annotate(geom = "text", x = 2013, y = 225, 
-           label = "Shad", color = "steelblue", 
-           alpha = 0.75, hjust = 0, size = 4) +
-  annotate(geom = "text", x = 2013, y = 30, 
-           label = "Herring", color = "darkgreen", 
-           alpha = 0.75, hjust = 0, size = 4)
-ggsave("other/figures/run_size_passage_cor_uncertainfallback_run030622k_logit.png",
+  labs(x = "", y = "Run size (n)")
+
+ggsave("other/figures/run_size_passage_cor_uncertainfallback_run030622k_logit_20220422.png",
        height = 4, width = 7,
        dpi = 400)
 
@@ -776,7 +779,7 @@ stairs %>%
         strip.background = element_rect(fill = "white")) +
   labs(x = "", y = "Number of individuals")
 
-ggsave("figures/stairstep.png", width = 7, height = 5, dpi = 400)
+# ggsave("figures/stairstep.png", width = 7, height = 5, dpi = 400)
 
 ```
 
@@ -819,5 +822,71 @@ ggsave("figures/fish_counts_by_hour_histograms.png",
        width = 7, height = 4, dpi = 400)
  
 
+```
+
+# % hours with pings during each day
+
+```{r}
+
+# Function to plot # pings/day by antenna to check antenna coverage
+# make a function to plot pings/day by antenna for a given year
+plot_antenna_pct_hrs_active <- function(ping_data){
+  
+  # get year
+  the_year <- as.numeric(unique(ping_data$year))
+  
+  # make data frame of 1st tagging dates
+    first_day <- tags %>% 
+    mutate(year = year(tag_time),
+           jul = yday(tag_time)) %>%
+    group_by(year) %>%
+    summarise(first_day = min(jul)) %>%
+    mutate(date = c("Apr 27", "Apr 26", "Apr 14", "Apr 13", 
+                    "Apr 6", "Apr 12", "Apr 10", "Apr 10"))
+    
+  plot_data <- ping_data %>%
+    mutate(day = yday(datetime),
+           hr = lubridate::hour(datetime)) %>%
+    group_by(day, hr, antenna) %>%
+    tally() %>%
+    arrange(antenna, day, hr) %>%
+    mutate(n1 = ifelse(n >= 3, 1, 0)) %>%
+    group_by(antenna, day) %>%
+    summarize(pct = 100*sum(n1)/24,
+              .groups = "drop")
+
+   antenna_plot <-
+    ggplot(plot_data) +
+    geom_col(aes(x = day, y = pct)) +
+    geom_vline(xintercept = filter(first_day, 
+                                   year == the_year)$first_day,
+               color = "red", lty = 2) +
+    facet_wrap(~antenna) +
+    theme_bw() +
+    scale_x_continuous(limits = c(91,182),
+                       breaks = c(32, 60, 91, 121, 152, 
+                                  182, 213, 244, 274),
+                       labels = c("Feb", "", "Apr", "May", "Jun", 
+                                  "Jul", "Aug", "", "Oct")) +
+    theme(text = element_text(size = 15)) +
+      labs(y = "% of hours active", x = "",
+           title = as.character(the_year))
+  
+ ggsave(here("figures", paste0(stringr::str_sub(year(ping_data$date[1])), 
+                                "_antenna_pct_hrs_active.png")), 
+         height = 4, width = 7, dpi = 400)
+  
+  return(antenna_plot)
+}
+
+# Plot pings/day by antenna to check antenna coverage
+plot_antenna_pct_hrs_active(data2012)
+plot_antenna_pct_hrs_active(data2013)
+plot_antenna_pct_hrs_active(data2014)
+plot_antenna_pct_hrs_active(data2015)
+plot_antenna_pct_hrs_active(data2016)
+plot_antenna_pct_hrs_active(data2017)
+plot_antenna_pct_hrs_active(data2018)
+plot_antenna_pct_hrs_active(data2019)
 ```
 
