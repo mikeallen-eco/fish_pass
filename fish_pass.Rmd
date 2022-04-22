@@ -890,3 +890,16 @@ plot_antenna_pct_hrs_active(data2018)
 plot_antenna_pct_hrs_active(data2019)
 ```
 
+
+# Fish passage time relative to sunrise/sunset
+```{r}
+
+if
+sun_file <- read.table(here("data",
+                           "sun",
+                           "sun2013.txt"), 
+                      skip = 9,
+                      nrows = 28
+                      )
+```
+
