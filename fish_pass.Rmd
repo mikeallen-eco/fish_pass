@@ -893,7 +893,9 @@ plot_antenna_pct_hrs_active(data2019)
 
 # Fish passage time relative to sunrise/sunset
 ```{r}
-year <- 2013
+
+read_nonleap <- function(year){
+# year <- 2015
 
 file_name <- paste0("sun", as.character(year), ".txt")
 
@@ -917,7 +919,7 @@ sun_file1 <- read.table(here("data",
 
 sun_file2 <- read.table(here("data",
                            "sun",
-                           "sun2013.txt"), 
+                           file_name), 
                       skip = 37,
                       nrows = 2
                       ) %>%
@@ -935,7 +937,7 @@ sun_file2 <- read.table(here("data",
 
 sun_file3 <- read.table(here("data",
                            "sun",
-                           "sun2013.txt"), 
+                           file_name), 
                       skip = 39,
                       nrows = 1
                       ) %>%
@@ -974,7 +976,9 @@ sun_file <- sun_file1 %>%
          ord = yday(datetime.sr)) %>%
   arrange(datetime.sr)
 
+return(sun_file)
 
+}
 
 ```
 
