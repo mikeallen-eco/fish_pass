@@ -33,9 +33,9 @@ tags <- read_xlsx(
          tag_time = ymd_hms(datetime, 
                            tz = "America/New_York"))
 
-# video time series
+# video time series - new
 v_time <- 
-  read_xlsx("other/2 IFW Video Data Golden Master 11_2_21.xlsx",
+  read_xlsx("other/IFW Video Data Golden Master_4_24_22.xlsx",
                sheet = "Grouped") %>%
   select(Date, time = Time, species = Species) %>%
   mutate(year = year(Date),
@@ -367,7 +367,6 @@ thetas %>%
 # )
 ```
 
-
 # Video time series 
 ```{r}
 # Match up year time series with 
@@ -400,7 +399,8 @@ boxplot(theta_draws$pass_cor2~theta_draws$i)
 boxplot(theta_draws$.value~theta_draws$i)
 
 # collect omega (fish average) passage rate draws & add fish/year
-# (just Shad in 2018 as that is the year with no passage info)
+# (just 2020 2021, & early years with no passage info)
+# (also 2018 missing for Shad)
 omega_draws_temp <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
   filter(i == 1)
 
@@ -416,10 +416,15 @@ omega_draws_temp_shad <- mutate(omega_draws_temp,
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[9])) %>%
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
   bind_rows(mutate(omega_draws_temp, year = 2018)) %>%
+  bind_rows(mutate(omega_draws_temp, year = 2020)) %>%
+  bind_rows(mutate(omega_draws_temp, year = 2021)) %>%
   mutate(species = "American Shad",
-         fallback = rep(fallback_vector, 11),
+         fallback = rep(fallback_vector, 13),
          pass_cor = .value,
          pass_cor2 = .value/.47)
+
+omega_draws_temp <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
+  filter(i == 2)
 
 omega_draws_temp_herring <- mutate(omega_draws_temp, 
                       year = shad_hist$year[1]) %>%
@@ -432,8 +437,10 @@ omega_draws_temp_herring <- mutate(omega_draws_temp,
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[8])) %>%
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[9])) %>%
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
+  bind_rows(mutate(omega_draws_temp, year = 2020)) %>%
+  bind_rows(mutate(omega_draws_temp, year = 2021)) %>%
   mutate(species = "River Herring spp.",
-         fallback = rep(fallback_vector, 10),
+         fallback = rep(fallback_vector, 12),
          pass_cor = .value/fallback,
          pass_cor2 = .value/.47)
 
@@ -515,13 +522,14 @@ fish_n %>%
   facet_wrap(~species) +
   scale_y_log10() +
   guides(fill = "none", color = "none") +
-  scale_x_continuous(breaks = c(2013:2019)) +
+  scale_x_continuous(breaks = c(2013:2021)) +
   theme_bw() +  
-  theme(text = element_text(size = 14)) +
+  theme(text = element_text(size = 14),
+        axis.text.x = element_text(size = 8)) +
   theme(strip.background = element_rect(fill="white")) +
   labs(x = "", y = "Run size (n)")
 
-ggsave("other/figures/run_size_passage_cor_uncertainfallback_run030622k_logit_20220422.png",
+ggsave("other/figures/run_size_passage_cor_uncertainfallback_run030622k_logit_20220426_newdata2.png",
        height = 4, width = 7,
        dpi = 400)
 
