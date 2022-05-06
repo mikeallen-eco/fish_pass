@@ -130,7 +130,9 @@ table(year(data2012$date))
 data2012 <- data2012 %>%
   select(file, date, time, datetime, direction, antenna, tag, tag_short) %>%
   arrange(datetime) %>%
-  mutate(year = "2012")
+  mutate(year = "2012") %>%
+  # remove one fish that was never actually detected; only test pings (see issue #28)
+  filter(tag_short != "166994725")
 
 rm(file_data_list, data, data_all, datadir, filename, filepath, files, i,
    data2012A1, data2012A2, data2012R1, data2012R2)

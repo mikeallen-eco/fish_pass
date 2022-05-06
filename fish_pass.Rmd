@@ -535,7 +535,6 @@ ggsave("other/figures/run_size_passage_cor_uncertainfallback_run030622k_logit_20
 
 ```
 # Attraction, staging, passage times
-Warning: data are wrong at the moment until antennas are sorted out.
 ```{r}
 fish_sum_plot = fish_sum %>%
   mutate(sp_cat = case_when(species %in% 
@@ -565,26 +564,31 @@ fish_sum_plot = fish_sum %>%
                            name == "transit.days" ~ 
                              "Transit time"),
          value2 = case_when(name == "transit.days" ~ log10(value),
-                            name == "staging.days" ~ log10(value),
-                            name == "passage.days" ~ log10(value),
+                            name == "staging.days" ~ log10(value+0.001),
                             TRUE ~ value),
-         metric = forcats::fct_reorder(metric, order)) 
+         metric = forcats::fct_reorder(metric, order))
+
+the_colors <- rep(c("darkgray", "transparent"), 4)
 
 fish_sum_plot %>%
-  filter(value < 300) %>% # sp_cat == "American Shad"
+  filter(value < 300,
+         !as.logical(name == "transit.days" & 
+                       value > .9)) %>% # sp_cat == "American Shad"
 ggplot() +
-  geom_violin(aes(x = sp_cat, # or geom_boxplot
-                  y = value+.001, 
+  geom_boxplot(aes(x = sp_cat, # or geom_boxplot
+                  y = value, 
                   fill = sp_cat),
               draw_quantiles = c(0.5),
               fill = "transparent",
-              color = "darkgray") +
-  geom_point(aes(x = sp_cat, y = value+0.001, color = sp_cat),
+              colour = the_colors, 
+              outlier.color = "transparent") +
+  geom_point(aes(x = sp_cat, 
+                 y = value, color = sp_cat),
              size = 3, alpha = .25) +
   facet_wrap(~metric, scales = "free") +
   theme_bw() + 
   labs(x = "", y = "Days", fill = "") +
-  scale_y_log10(breaks = c(0.01,0.1, 1, 10)) +
+  # scale_y_log10(breaks = c(0.01,0.1, 1, 10)) +
   theme(text = element_text(size = 14),
         # axis.text.x = element_blank(),
         legend.position = "none",
@@ -593,7 +597,7 @@ ggplot() +
   scale_color_manual(values = c("steelblue", "darkgreen"))
   
 
-ggsave("other/figures/passage_time_violin.png",
+ggsave("other/figures/passage_time_boxplot4.png",
        height = 4, width = 7,
        dpi = 400)
 ```

@@ -72,7 +72,7 @@ if(sum(grepl(colnames(temp1b), pattern = "_A3"))==0){
 # calculate durations
   # attraction time (tag_time -> min A1)
   # staging time (min A1 -> max A1)
-  # transit time (max A1 -> max A4)
+  # transit time (max A1 -> min A4)
   # passage time (sum of other 3)
 temp2 <- temp1b %>%
   mutate(
@@ -87,11 +87,11 @@ temp2 <- temp1b %>%
       )) / (3600 * 24),
     transit.days = as.numeric(as.duration(
       interval(start = last_ping_A1,
-               end = last_ping_A4)
+               end = first_ping_A4)
     )) / (3600 * 24),
     passage.days = as.numeric(as.duration(
       interval(start = tag_time,
-               end = last_ping_A4)
+               end = first_ping_A4)
     )) / (3600 * 24)
   )
 
