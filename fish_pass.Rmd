@@ -233,11 +233,11 @@ fallback_p_cor <- fallback_p / 0.5
 ```
 # Run model
 ```{r}
-fish_modn <- jagsUI::jags(
+fish_mod_new <- jagsUI::jags(
   data = fish_jags_data,
   model.file = "scripts/fish_mod_logit.txt",
-  n.iter = 600000,
-  n.burnin = 400000,
+  n.iter = 1000000,
+  n.burnin = 500000,
   parameters.to.save = c(
     "theta",
     "omega",
@@ -261,21 +261,29 @@ fish_modn <- jagsUI::jags(
              rnorm(8, -10, 0.1)),
       omega =
         c(rnorm(1, .47, .01),
-          rnorm(1, .02, .01)),
+          rnorm(1, .01, .01)),
       kappaMinusTwo = c(rnorm(1, 400, 2),                                                      rnorm(1, 1000, 2)),
       S0 = rnorm(1, 25, 1),
       R0 = rnorm(1, .1, 0.01)
     )
 )
-fish_mod
-# saveRDS(fish_mod, "other/output/fish_jags_mod_030622k_logit_all_converged.rds")
+fish_mod_new
+# saveRDS(fish_mod_new, "other/output/fish_jags_mod_052022a_logit_all_converged.rds")
 ```
 # Plot model output - logit, 030622k
 ```{r}
+# old version with 2 herring passed
+# fish_mod <- readRDS(here(
+#   "other",
+#   "output",
+#   "fish_jags_mod_030622k_logit_all_converged.rds"
+# ))
+
+# new version with 1 herring passed
 fish_mod <- readRDS(here(
   "other",
   "output",
-  "fish_jags_mod_030622k_logit_all_converged.rds"
+  "fish_jags_mod_052022a_logit_all_converged.rds"
 ))
 
 # dev.new()
@@ -360,7 +368,7 @@ thetas %>%
 
 
 # ggsave(
-#   "other/figures/jags_nofishhypers_logit_allconverged_run030622l.png",
+#   "other/figures/jags_nofishhypers_logit_allconverged_run052222a.png",
 #   width = 7,
 #   heigh = 5,
 #   dpi = 400
