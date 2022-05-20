@@ -606,9 +606,11 @@ ggsave("other/figures/passage_time_boxplot4.png",
 
 # how many total detection
 table(fish_sum$species) 
-# 26 shad, 6 herring
+# 26 shad, 5 herring
 table(tags$Common.Name) 
 # 163 herring = 37 alewife, 50 river herring, 76 blueback
+# Anthony edited this in the ms to 167 
+# (+ 4 fish found in records, not in tagging database)
 # 51 shad
 
 # shad attract
@@ -645,9 +647,9 @@ fish_sum_transit_shad <- fish_sum %>%
   select(species, transit.days)
 
 summary(fish_sum_transit_shad$transit.days) #
-  #  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-  # 0.005   0.007   0.009   0.893   0.048  16.504 
-sd(fish_sum_transit_shad$transit.days) # 3.681
+# Min.  1st Qu. Median   Mean 3rd Qu. Max. 
+# 0.0045 0.0072 0.0093 0.0702 0.0477 0.9988
+sd(fish_sum_transit_shad$transit.days) # 0.2916
 length(fish_sum_transit_shad$transit.days) # 20
 
 # shad passage
@@ -658,9 +660,9 @@ fish_sum_passage_shad <- fish_sum %>%
   select(species, passage.days)
 
 summary(fish_sum_passage_shad$passage.days) #
-  #    Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-  # 0.373   5.299   6.824   8.569   9.233  27.583
-sd(fish_sum_passage_shad$passage.days) # 6.68
+  #  Min. 1st Qu. Median  Mean 3rd Qu.  Max. 
+  #  0.373  5.299  6.824  7.746  9.233 20.884 
+sd(fish_sum_passage_shad$passage.days) # 5.023
 length(fish_sum_passage_shad$passage.days) # 20
 
 ### Herring
@@ -673,9 +675,9 @@ fish_sum_attract_herring <- fish_sum %>%
   select(species, attraction.days)
 
 summary(fish_sum_attract_herring$attraction.days) #
-  #  Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-  # 0.041   5.119  10.198   8.057  12.064  13.931 
-sd(fish_sum_attract_herring$attraction.days) # 7.189
+#      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
+# 10.197589 11.131015 12.064440 12.064440 12.997866 13.931292 
+sd(fish_sum_attract_herring$attraction.days) # 2.6401264713
 length(fish_sum_attract_herring$attraction.days) # 3
 
 # herring stage
@@ -686,10 +688,10 @@ fish_sum_stage_herring <- fish_sum %>%
   select(species, staging.days)
 
 summary(fish_sum_stage_herring$staging.days) #
-   # Min. 1st Qu.  Median    Mean 3rd Qu.    Max. 
-  # 0.000   0.016   2.437   4.353   8.137  11.997 
-sd(fish_sum_stage_herring$staging.days) # 5.271
-length(fish_sum_stage_herring$staging.days) # 6
+ #  Min.    1st Qu.       Median       Mean      3rd Qu.    Max. 
+ # 0.0  0.062577083  4.810761343  5.223404468  9.246379745 11.997
+sd(fish_sum_stage_herring$staging.days) # 5.3888
+length(fish_sum_stage_herring$staging.days) # 5
 
 # herring transit
 fish_sum_transit_herring <- fish_sum %>%
@@ -699,9 +701,9 @@ fish_sum_transit_herring <- fish_sum %>%
   select(species, transit.days)
 
 summary(fish_sum_transit_herring$transit.days) #
-#      Min.   1st Qu.    Median      Mean   3rd Qu.      Max. 
-# -0.000346  0.004555  0.009456  0.006658  0.010160  0.010865 
-sd(fish_sum_transit_herring$transit.days) # 0.006107
+#  Min.   1st Qu.  Median   Mean   3rd Qu.    Max. 
+# 0.0095  0.009808 0.01016 0.01016 0.01051 0.01086
+sd(fish_sum_transit_herring$transit.days) # 0.00099625125564
 length(fish_sum_transit_herring$transit.days) # 3
 
 # herring passage
