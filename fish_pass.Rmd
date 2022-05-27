@@ -4,9 +4,7 @@ author: "Mike Allen"
 date: "12/7/2021"
 output: html_document
 ---
-
-# Packages
-Load packages, functions, & data; format data
+# Load packages, functions, & data; format data
 ```{r}
 library(dplyr)
 library(ggplot2)
@@ -114,10 +112,12 @@ f <- tags %>%
   filter(Common.Name %in% c("American Shad",
                             "River Herring",
                             "Blueback Herring",
+                            "Blueback herring",
                             "Alewife")) %>%
   left_join(select(fish_sum, year = detect_year, tag_short, passage.days), by = "tag_short") %>%
   # remove 1 herring tagged in 2014 but only detected in 2015
-  filter(is.na(passage.days) | passage.days < 300) %>%
+  mutate(passage.days = case_when(passage.days > 300 ~ NaN,
+                                  TRUE ~ passage.days)) %>%
   mutate(passage = case_when(is.na(passage.days) ~ 0,
                                TRUE ~ 1),
          year = as.factor(case_when(is.na(year) ~ year(tag_time),
@@ -125,7 +125,7 @@ f <- tags %>%
          year_num = as.numeric(as.factor(year)),
          year_char = paste0("y", year),
          sp = as.factor(case_when(grepl(Common.Name, 
-                                        pattern="Herring|Alewife")~
+                                        pattern="Herring|Alewife|herring")~
                           "Herring",
                         TRUE ~ "Shad")))
 
@@ -268,26 +268,38 @@ fish_mod_new <- jagsUI::jags(
     )
 )
 fish_mod_new
-# saveRDS(fish_mod_new, "other/output/fish_jags_mod_052022a_logit_all_converged.rds")
+# saveRDS(fish_mod_new, "other/output/fish_jags_mod_052722a_logit_all_converged.rds")
 ```
-# Plot model output - logit, 030622k
+# Plot model output - logit, 052022k
 ```{r}
-# old version with 2 herring passed
-# fish_mod <- readRDS(here(
-#   "other",
-#   "output",
-#   "fish_jags_mod_030622k_logit_all_converged.rds"
-# ))
-
 # new version with 1 herring passed
 fish_mod <- readRDS(here(
   "other",
   "output",
-  "fish_jags_mod_052022a_logit_all_converged.rds"
+  "fish_jags_mod_052722a_logit_all_converged.rds"
 ))
 
 # dev.new()
 # plot(fish_mod)
+
+# for 2018 shad n annotation
+shad_n <-
+  data.frame(
+    i = 16,
+    theta_mean = NA,
+    theta_q2.5 = NA,
+    theta_q97.5 = NA,
+    theta_q10 = NA,
+    theta_q90 = NA,
+    year = 2018,
+    species = "American Shad",
+    trials.x = 0,
+    successes = 0,
+    prop = NA,
+    x = 1.05,
+    n_label = "0"
+  )
+
 thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
   group_by(i) %>%
   summarise(
@@ -302,7 +314,8 @@ thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
   left_join(raw_sum) %>%
   mutate(x = c(rep(1.05, 7), rep(.09, 8)),
          n_label = paste0(c(rep("", 6),"n =",
-                            rep("", 7),"n ="), trials.x))
+                            rep("", 7),"n ="), trials.x)) %>%
+  bind_rows(shad_n)
 
 omegas <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
   group_by(i) %>%
@@ -315,6 +328,10 @@ omegas <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
   ) %>%
   mutate(species = c("American Shad", "Herring spp."))
 
+# for shad 2018 point
+shad_2018 <- omegas %>%
+  filter(species == "American Shad") %>%
+  mutate(year = 2018)
 
 thetas %>%
   ggplot() +
@@ -346,8 +363,20 @@ thetas %>%
                     y = year),
                 size = 1,
                 width = 0) +
+  geom_errorbar(aes(xmin = omega_q2.5,
+                    xmax = omega_q97.5,
+                    y = year), width = 0,
+                data = shad_2018) +
+  geom_errorbar(aes(xmin = omega_q10,
+                    xmax = omega_q90,
+                    y = year),
+                size = 1,
+                width = 0,
+                data = shad_2018) +
   geom_point(aes(x = theta_mean,
                  y = year), size = 4) +
+  geom_point(aes(y = year, x = omega_mean),
+             size = 4, data = shad_2018) +
   facet_wrap( ~ species, scales = "free") +
   # scale_x_continuous(#limits = c(0, 1.1),
   #                    breaks = seq(0, 1, 0.2)) +
@@ -363,38 +392,38 @@ thetas %>%
                 label = n_label),
             nudge_x = .02,
             color = "darkgray",
-            hjust = 1) 
+            hjust = 1)
 
 
 
-# ggsave(
-#   "other/figures/jags_nofishhypers_logit_allconverged_run052222a.png",
-#   width = 7,
-#   heigh = 5,
-#   dpi = 400
-# )
+ggsave(
+  "other/figures/jags_nofishhypers_logit_allconverged_run052722a.png",
+  width = 7,
+  heigh = 5,
+  dpi = 400
+)
 ```
-
 # Video time series 
 ```{r}
 # Match up year time series with 
 fish_mod <- readRDS(here("other",
                          "output",
-                     "fish_jags_mod_030622k_logit_all_converged.rds"
+                     "fish_jags_mod_052722a_logit_all_converged.rds"
                          ))
 
-# need to load this previous model as fallback parameter wasn't saved in other model
-fish_mod2 <- readRDS("other/output/fish_jags_mod_030622m_beta33_nofishhypers_all_converged.rds")
+fallback_vector <- tidybayes::gather_draws(fish_mod, fallback_p_cor)$.value
 
-fallback_vector <- tidybayes::gather_draws(fish_mod2, fallback_p_cor)$.value
+# specify number of iterations in model
+iter <- 7500
 
 # collect all theta posterior draws and add fish/year info
 theta_draws <- tidybayes::gather_draws(fish_mod, p[i]) %>%
   left_join(data.frame(i = 1:15, 
-                       year = c(2012:2017,2019,2012:2019))) %>%
+                       year = c(2012:2017,2019,2012:2019)),
+            by = "i") %>%
   ungroup() %>%
-  mutate(species = c(rep("American Shad", 21000), 
-                     rep("River Herring spp.", 24000)),
+  mutate(species = c(rep("American Shad", 7*iter), 
+                     rep("River Herring spp.", 8*iter)),
          fallback = rep(fallback_vector, 15),
          pass_cor = case_when(species == "American Shad" ~
                                 .value,
@@ -537,7 +566,7 @@ fish_n %>%
   theme(strip.background = element_rect(fill="white")) +
   labs(x = "", y = "Run size (n)")
 
-ggsave("other/figures/run_size_passage_cor_uncertainfallback_run030622k_logit_20220426_newdata2.png",
+ggsave("other/figures/run_size_passage_cor_uncertainfallback_run052722a_logit_20220527_newdata.png",
        height = 4, width = 7,
        dpi = 400)
 
@@ -749,15 +778,15 @@ stairs <- fish_sum %>%
                               ) %>%
   right_join(tags) %>%
   filter(grepl(Common.Name, 
-               pattern = "Herring|American Shad|Alewife")) %>%
+               pattern = "herring|Herring|American Shad|Alewife")) %>%
   mutate(sp = case_when(grepl(Common.Name, 
-                                   pattern = "Herring|Alewife") ~
+                                   pattern = "herring|Herring|Alewife") ~
                                "River Herring",
                         grepl(Common.Name, 
                                    pattern = "American Shad") ~
                                "American Shad",
                         grepl(species, 
-                                   pattern = "Herring|Alewife") ~
+                                   pattern = "herring|Herring|Alewife") ~
                                "River Herring",
                         grepl(species, 
                                    pattern = "American Shad") ~
@@ -790,7 +819,7 @@ stairs %>%
          stage2 = rep(c("Tagged", 
                         "Reached\nladder", 
                         "Passed\nladder"), 2),
-         n = p*c(51, 51, 51, 162, 162, 162),
+         n = p*c(51, 51, 51, 163, 163, 163),
          stage2 = forcats::fct_reorder(stage2, stage)) %>%
   ggplot() +
   geom_col(aes(x = stage2, y = n),
@@ -801,7 +830,7 @@ stairs %>%
         strip.background = element_rect(fill = "white")) +
   labs(x = "", y = "Number of individuals")
 
-# ggsave("figures/stairstep.png", width = 7, height = 5, dpi = 400)
+# ggsave("figures/stairstep_20220527.png", width = 7, height = 5, dpi = 400)
 
 ```
 
