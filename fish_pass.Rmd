@@ -14,10 +14,10 @@ library(wesanderson)
 library(lubridate)
 library(readxl)
 source("scripts/fishsum_function.R")
+source("scripts/sunrise_sunset_functions.R")
 `%notin%` <- Negate(`%in%`)
 
 # read in tagging data
-# note: currently excludes herring w/ "226000011055/35/85" tag
 
 tags <- read_xlsx(
   "other/1 IFW Tagging Data Golden Master 2_25_22.xlsx",
@@ -25,7 +25,9 @@ tags <- read_xlsx(
   rename(tag = 'Tag Number',
          datetime = as.character('Date and Time'),
          Common.Name = 'Common Name') %>%
-  mutate(tag = as.numeric(tag)) %>%
+  mutate(tag = case_when(tag == "226000011055/35/85" ~ "226000011055",
+                         TRUE ~ tag),
+         tag = as.numeric(tag)) %>%
   filter(is.na(tag) == FALSE) %>%
   mutate(tag_short = str_sub(tag, - 9, - 1),
          tag_time = ymd_hms(datetime, 
@@ -268,7 +270,7 @@ fish_mod_new <- jagsUI::jags(
     )
 )
 fish_mod_new
-# saveRDS(fish_mod_new, "other/output/fish_jags_mod_052722a_logit_all_converged.rds")
+# saveRDS(fish_mod_new, "other/output/fish_jags_mod_060122a_logit_all_converged.rds")
 ```
 # Plot model output - logit, 052022k
 ```{r}
@@ -276,7 +278,7 @@ fish_mod_new
 fish_mod <- readRDS(here(
   "other",
   "output",
-  "fish_jags_mod_052722a_logit_all_converged.rds"
+  "fish_jags_mod_060122a_logit_all_converged.rds"
 ))
 
 # dev.new()
@@ -397,7 +399,7 @@ thetas %>%
 
 
 ggsave(
-  "other/figures/jags_nofishhypers_logit_allconverged_run052722a.png",
+  "other/figures/jags_nofishhypers_logit_allconverged_run060122a.png",
   width = 7,
   heigh = 5,
   dpi = 400
@@ -408,7 +410,7 @@ ggsave(
 # Match up year time series with 
 fish_mod <- readRDS(here("other",
                          "output",
-                     "fish_jags_mod_052722a_logit_all_converged.rds"
+                     "fish_jags_mod_060122a_logit_all_converged.rds"
                          ))
 
 fallback_vector <- tidybayes::gather_draws(fish_mod, fallback_p_cor)$.value
@@ -566,7 +568,7 @@ fish_n %>%
   theme(strip.background = element_rect(fill="white")) +
   labs(x = "", y = "Run size (n)")
 
-ggsave("other/figures/run_size_passage_cor_uncertainfallback_run052722a_logit_20220527_newdata.png",
+ggsave("other/figures/run_size_passage_cor_uncertainfallback_run060122a_logit_20220601_newdata.png",
        height = 4, width = 7,
        dpi = 400)
 
@@ -784,12 +786,6 @@ stairs <- fish_sum %>%
                                "River Herring",
                         grepl(Common.Name, 
                                    pattern = "American Shad") ~
-                               "American Shad",
-                        grepl(species, 
-                                   pattern = "herring|Herring|Alewife") ~
-                               "River Herring",
-                        grepl(species, 
-                                   pattern = "American Shad") ~
                                "American Shad"),
          farthest = replace_na(farthest, 0) + 1,
          farthest2 = case_when(farthest %in% 2:4 ~ 2, 
@@ -804,6 +800,8 @@ stairs <- fish_sum %>%
          far_tag, far_weir, far_pass) %>%
   arrange(sp, far_tag, far_weir, far_pass)
                         
+fallback_df <- data.frame(sp = "River Herring", name = "tag_c",
+                          stage = 1, stage2 = "Tagged", n = 164*(1-.48))
 
 stairs %>%
   group_by(sp) %>%
@@ -819,36 +817,72 @@ stairs %>%
          stage2 = rep(c("Tagged", 
                         "Reached\nladder", 
                         "Passed\nladder"), 2),
-         n = p*c(51, 51, 51, 163, 163, 163),
+         n = p*c(51, 51, 51, 164, 164, 164),
          stage2 = forcats::fct_reorder(stage2, stage)) %>%
   ggplot() +
   geom_col(aes(x = stage2, y = n),
            position = position_dodge(width = 1)) +
+  geom_col(aes(x = stage2, y = n),
+           position = position_dodge(width = 1),
+           fill = "darkgray",
+           data = fallback_df) +
   facet_wrap(~ sp, scales = "free") +
   theme_bw() +
   theme(text = element_text(size = 14),
         strip.background = element_rect(fill = "white")) +
   labs(x = "", y = "Number of individuals")
 
-# ggsave("figures/stairstep_20220527.png", width = 7, height = 5, dpi = 400)
+# ggsave("figures/stairstep_20220601.png", width = 7, height = 5, dpi = 400)
 
 ```
 
-# Histogram of fish counts by hour
+# Histogram of fish counts timing (by hour)
 ```{r}
+
+# read in sunrise / sunset times
+sr2012 <- read_leap(2012)
+sr2013 <- read_nonleap(2013)
+sr2014 <- read_nonleap(2014)
+sr2015 <- read_nonleap(2015)
+sr2016 <- read_leap(2016)
+sr2017 <- read_nonleap(2017)
+sr2018 <- read_nonleap(2018)
+sr2019 <- read_nonleap(2019)
+sr2020 <- read_leap(2020)
+sr2021 <- read_nonleap(2021)
+srss <- bind_rows(sr2012, sr2013, sr2014, sr2015,
+                  sr2016, sr2017, sr2018, sr2019,
+                  sr2020, sr2021)
+
 # video time series
 v_time_hist <- 
-  read_xlsx("other/2 IFW Video Data Golden Master 11_2_21.xlsx",
+  read_xlsx("other/IFW Video Data Golden Master_4_24_22.xlsx",
                sheet = "Grouped") %>%
   select(Date, time = Time, species = Species) %>%
   mutate(year = year(Date),
          # note: time read in as decimal hours (a prop. of 24 hr)
          time = as.numeric(as.character(time))*24,
          hour = trunc(time),
+         min = trunc((time-hour)*60),
+         datetime = ymd_hm(paste0(Date, " ", hour, ":", min)),
          y2013 = case_when(year == 2013 ~ "2013",
-                                  TRUE ~ "2014-2019")) %>%
+                                  TRUE ~ "2014-2019"),
+         ord = yday(datetime)) %>%
   filter(species %in% c("American Shad", "River Herring spp.")) %>%
-  arrange(species, time)
+  arrange(species, time) %>%
+  left_join(srss, by = c("year", "ord")) %>%
+  mutate(m.rel.sr = 
+           minute(as.period(interval(datetime.sr,datetime), 
+                            unit = "minutes")),
+         m.rel.ss = 
+           minute(as.period(interval(datetime,datetime.ss), 
+                            unit = "minutes")),
+         m.daylight = m.rel.sr+m.rel.ss,
+         m.night = 1440 - m.daylight,
+         p.daylight = case_when(m.rel.sr < 0 ~ 100*m.rel.sr/m.night,
+                                m.rel.ss < 0 ~
+                                  100+100*abs(m.rel.ss)/m.night,
+                                TRUE ~ 100*m.rel.sr/m.daylight))
 
 
 v_time_hist %>%
@@ -871,12 +905,56 @@ v_time_hist %>%
 
 ggsave("figures/fish_counts_by_hour_histograms.png", 
        width = 7, height = 4, dpi = 400)
- 
+```
+# Histogram of fish counts timing relative to sunrise/sunset
+```{r}
 
+p.day.plot <- v_time_hist %>%
+  filter(is.na(p.daylight)==F) %>%
+  mutate(bin = cut(p.daylight, breaks = seq(-50,160, by = 10),
+                   labels = seq(-50,150, by = 10))) %>%
+  group_by(species, y2013, bin) %>%
+  summarize(n = length(p.daylight),
+            .groups = "drop") %>%
+  group_by(species, y2013) %>%
+  mutate(p = n / sum(n))
+
+ggplot(p.day.plot) +
+  geom_col(aes(x = bin, y=p*100),
+                 color = "transparent", fill = "transparent") +
+  geom_rect(xmin = -.5, xmax = 5.5, ymin = 0, ymax = 26, 
+            fill = "gray", color = "transparent") +  
+  geom_rect(xmin = 15.5, xmax = 21.5, ymin = 0, ymax = 26, 
+            fill = "gray", color = "transparent") +  
+  geom_vline(xintercept = 10.5, lty = 2, color = "darkgray") +    
+  geom_vline(xintercept = 5.5, lty = 2, color = "darkgray") +  
+  geom_vline(xintercept = 15.5, lty = 2, color = "darkgray") +geom_col(aes(x = bin, y=p*100),
+                 color = "darkgray") +
+  annotate("text", x = 10.7, y = 22, 
+           label = "Midday", size = 2, 
+           color = "darkgray", hjust = 0) +
+  annotate("text", x = 5.3, y = 22, 
+           label = "Sunrise", size = 2, 
+           color = "white", hjust = 1) +
+  annotate("text", x = 15.7, y = 22, 
+           label = "Sunset", size = 2, 
+           color = "white", hjust = 0) +
+  facet_grid(y2013~species) +
+  theme_classic() +
+  theme(text = element_text(size = 14),
+        strip.background = element_rect(fill = "white"),
+        axis.text.x = element_blank()) +
+  labs(x = "Time relative to sunrise and sunset", y = "% of individuals counted")
+
+ggsave("figures/fish_counts_by_relative_sr_ss_histograms.png", 
+       width = 7, height = 4, dpi = 400)
+
+p.day.plot %>% filter(bin %in% seq(100,160, 10)) %>% group_by(species, y2013) %>% summarise(sump = sum(p))
+
+p.day.plot %>% filter(bin %in% seq(100,160, 10)) %>% group_by(species, y2013) %>% summarise(sump = sum(p))
 ```
 
 # % hours with pings during each day
-
 ```{r}
 
 # Function to plot # pings/day by antenna to check antenna coverage
@@ -897,7 +975,10 @@ plot_antenna_pct_hrs_active <- function(ping_data){
     
   plot_data <- ping_data %>%
     mutate(day = yday(datetime),
-           hr = lubridate::hour(datetime)) %>%
+           hr = lubridate::hour(datetime),
+           antenna = case_when(antenna == "A1" ~ "A1 (entrance)",
+                               antenna == "A4" ~ "A4 (exit)",
+                               TRUE ~ antenna)) %>%
     group_by(day, hr, antenna) %>%
     tally() %>%
     arrange(antenna, day, hr) %>%
@@ -942,94 +1023,11 @@ plot_antenna_pct_hrs_active(data2019)
 ```
 
 
-# Fish passage time relative to sunrise/sunset
+
 ```{r}
 
-read_nonleap <- function(year){
-# year <- 2015
 
-file_name <- paste0("sun", as.character(year), ".txt")
 
-sun_file1 <- read.table(here("data",
-                           "sun",
-                           file_name), 
-                      skip = 9,
-                      nrows = 28
-                      ) %>%
-  select(1,8:15) %>%
-  rename(day = 1,
-         apr.sr = 2,
-         apr.ss = 3,
-         may.sr = 4,
-         may.ss = 5,
-         jun.sr = 6,
-         jun.ss = 7,
-         jul.sr = 8,
-         jul.ss = 9
-         )
-
-sun_file2 <- read.table(here("data",
-                           "sun",
-                           file_name), 
-                      skip = 37,
-                      nrows = 2
-                      ) %>%
-  select(1,6:13) %>%
-  rename(day = 1,
-         apr.sr = 2,
-         apr.ss = 3,
-         may.sr = 4,
-         may.ss = 5,
-         jun.sr = 6,
-         jun.ss = 7,
-         jul.sr = 8,
-         jul.ss = 9
-         )
-
-sun_file3 <- read.table(here("data",
-                           "sun",
-                           file_name), 
-                      skip = 39,
-                      nrows = 1
-                      ) %>%
-  select(1,6:9) %>%
-  rename(day = 1,
-         may.sr = 2,
-         may.ss = 3,
-         jul.sr = 4,
-         jul.ss = 5
-         )
-
-sun_file <- sun_file1 %>%
-  bind_rows(sun_file2) %>%
-  bind_rows(sun_file3) %>%
-  pivot_longer(cols = apr.sr:jul.ss, 
-               values_to = "time") %>%
-  mutate(month = substr(name, 1, 3),
-         type = substr(name, 5, 7)) %>%
-  pivot_wider(id_cols = c(month, day),
-              values_from = time,
-              names_from = type) %>%
-  filter(is.na(sr)==F) %>%
-  mutate(sr.h = as.numeric(substr(sr, 1,1)),
-         sr.m = as.numeric(substr(sr, 2,3)),
-         ss.h = as.numeric(substr(ss, 1,2)),
-         ss.m = as.numeric(substr(ss, 3,4)),
-         year = year,
-         mo = case_when(month == "apr" ~ 4,
-                        month == "may" ~ 5,
-                        month == "jun" ~ 6,
-                        month == "jul" ~ 7),
-         datetime.sr = ymd_hm(paste0(year,"-",mo, "-", day, " ", 
-                              sr.h,":",sr.m)),
-         datetime.ss = ymd_hm(paste0(year,"-",mo, "-", day, " ", 
-                              ss.h,":",ss.m)),
-         ord = yday(datetime.sr)) %>%
-  arrange(datetime.sr)
-
-return(sun_file)
-
-}
 
 ```
 
