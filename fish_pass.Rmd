@@ -195,6 +195,56 @@ fish_jags_data <- list(
   fallback_detect = c(rep(1,33), rep(0,106)),
   fallback_n = 139
 )
+
+# read in sunrise / sunset times
+sr2012 <- read_leap(2012)
+sr2013 <- read_nonleap(2013)
+sr2014 <- read_nonleap(2014)
+sr2015 <- read_nonleap(2015)
+sr2016 <- read_leap(2016)
+sr2017 <- read_nonleap(2017)
+sr2018 <- read_nonleap(2018)
+sr2019 <- read_nonleap(2019)
+sr2020 <- read_leap(2020)
+sr2021 <- read_nonleap(2021)
+srss <- bind_rows(sr2012, sr2013, sr2014, sr2015,
+                  sr2016, sr2017, sr2018, sr2019,
+                  sr2020, sr2021)
+
+# video time series
+v_time_hist <- 
+  read_xlsx("other/IFW Video Data Golden Master_4_24_22.xlsx",
+               sheet = "Grouped") %>%
+  select(Date, time = Time, species = Species) %>%
+  mutate(year = year(Date),
+         # note: time read in as decimal hours (a prop. of 24 hr)
+         time = as.numeric(as.character(time))*24,
+         hour = trunc(time),
+         min = trunc((time-hour)*60),
+         datetime = ymd_hm(paste0(Date, " ", hour, ":", min)),
+         y2013 = case_when(year == 2013 ~ "2013",
+                                  TRUE ~ "2014-2019"),
+         ord = yday(datetime)) %>%
+  filter(species %in% c("American Shad", "River Herring spp.")) %>%
+  arrange(species, time) %>%
+  left_join(srss, by = c("year", "ord")) %>%
+  mutate(m.rel.sr = 
+           minute(as.period(interval(datetime.sr,datetime), 
+                            unit = "minutes")),
+         m.rel.ss = 
+           minute(as.period(interval(datetime,datetime.ss), 
+                            unit = "minutes")),
+         m.daylight = m.rel.sr+m.rel.ss,
+         m.night = 1440 - m.daylight,
+         p.daylight = case_when(m.rel.sr < 0 ~ 100*m.rel.sr/m.night,
+                                m.rel.ss < 0 ~
+                                  100+100*abs(m.rel.ss)/m.night,
+                                TRUE ~ 100*m.rel.sr/m.daylight))
+
+# remove individual sunrise/sunset data frames
+rm(sr2012, sr2013, sr2014, sr2015,
+                  sr2016, sr2017, sr2018, sr2019,
+                  sr2020, sr2021)
 ```
 # Save data and diagnostic plot files for inspection
 Need to be checked by Anthony.
@@ -765,7 +815,6 @@ fish_sum_sum_y2 <- fish_sum %>%
          grepl(species, pattern = "Herring|American Shad"))
 
 ```
-
 # Stairstep figure
 ```{r}
 
@@ -839,52 +888,6 @@ stairs %>%
 # Histogram of fish counts timing (by hour)
 ```{r}
 
-# read in sunrise / sunset times
-sr2012 <- read_leap(2012)
-sr2013 <- read_nonleap(2013)
-sr2014 <- read_nonleap(2014)
-sr2015 <- read_nonleap(2015)
-sr2016 <- read_leap(2016)
-sr2017 <- read_nonleap(2017)
-sr2018 <- read_nonleap(2018)
-sr2019 <- read_nonleap(2019)
-sr2020 <- read_leap(2020)
-sr2021 <- read_nonleap(2021)
-srss <- bind_rows(sr2012, sr2013, sr2014, sr2015,
-                  sr2016, sr2017, sr2018, sr2019,
-                  sr2020, sr2021)
-
-# video time series
-v_time_hist <- 
-  read_xlsx("other/IFW Video Data Golden Master_4_24_22.xlsx",
-               sheet = "Grouped") %>%
-  select(Date, time = Time, species = Species) %>%
-  mutate(year = year(Date),
-         # note: time read in as decimal hours (a prop. of 24 hr)
-         time = as.numeric(as.character(time))*24,
-         hour = trunc(time),
-         min = trunc((time-hour)*60),
-         datetime = ymd_hm(paste0(Date, " ", hour, ":", min)),
-         y2013 = case_when(year == 2013 ~ "2013",
-                                  TRUE ~ "2014-2019"),
-         ord = yday(datetime)) %>%
-  filter(species %in% c("American Shad", "River Herring spp.")) %>%
-  arrange(species, time) %>%
-  left_join(srss, by = c("year", "ord")) %>%
-  mutate(m.rel.sr = 
-           minute(as.period(interval(datetime.sr,datetime), 
-                            unit = "minutes")),
-         m.rel.ss = 
-           minute(as.period(interval(datetime,datetime.ss), 
-                            unit = "minutes")),
-         m.daylight = m.rel.sr+m.rel.ss,
-         m.night = 1440 - m.daylight,
-         p.daylight = case_when(m.rel.sr < 0 ~ 100*m.rel.sr/m.night,
-                                m.rel.ss < 0 ~
-                                  100+100*abs(m.rel.ss)/m.night,
-                                TRUE ~ 100*m.rel.sr/m.daylight))
-
-
 v_time_hist %>%
   group_by(species, y2013, hour) %>%
   summarize(n = length(hour),
@@ -952,6 +955,73 @@ ggsave("figures/fish_counts_by_relative_sr_ss_histograms.png",
 p.day.plot %>% filter(bin %in% seq(100,160, 10)) %>% group_by(species, y2013) %>% summarise(sump = sum(p))
 
 p.day.plot %>% filter(bin %in% seq(100,160, 10)) %>% group_by(species, y2013) %>% summarise(sump = sum(p))
+```
+
+
+# calculate metrics about when fish pass
+For reference: in 2013 there was 1 fish (0.2%) counted > 60 min after sunset; 6 (2%) counted >45 min after sunset;  14 (4%) counted >30 min after; and 27 (8%) counted anytime after sunset.
+```{r}
+# American Shad
+shad_time <- v_time_hist %>%
+  filter(species == "American Shad",
+         y2013 == "2014-2019",
+         is.na(m.rel.ss) == F)
+
+shad_time_window30 <- shad_time %>%
+  filter(m.rel.sr >= 0,
+         m.rel.ss >= -30)
+
+shad_time_window <- shad_time %>%
+  filter(m.rel.sr >= 0,
+         m.rel.ss >= 0)
+
+# shad passing sunrise to 30 min after sunset
+length(shad_time_window30$m.rel.ss)/length(shad_time$m.rel.ss) # 95.7%
+# shad passing sunrise to sunset
+length(shad_time_window$m.rel.ss)/length(shad_time$m.rel.ss) # 93.1%
+
+
+# River Herring
+herring_time <- v_time_hist %>%
+  filter(species == "River Herring spp.",
+         y2013 == "2014-2019",
+         is.na(m.rel.ss) == F)
+
+herring_time_window30 <- herring_time %>%
+  filter(m.rel.sr >= 0,
+         m.rel.ss >= -30)
+
+herring_time_window <- herring_time %>%
+  filter(m.rel.sr >= 0,
+         m.rel.ss >= 0)
+
+# river herring passing sunrise to 30 min after sunset
+length(herring_time_window30$m.rel.ss)/length(herring_time$m.rel.ss) 
+# 87.5%
+# river herring passing sunrise to sunset
+length(herring_time_window$m.rel.ss)/length(herring_time$m.rel.ss) 
+# 83.7%
+
+# combined
+fish_time <- v_time_hist %>%
+  filter(y2013 == "2014-2019",
+         is.na(m.rel.ss) == F)
+
+fish_time_window30 <- fish_time %>%
+  filter(m.rel.sr >= 0,
+         m.rel.ss >= -30)
+
+fish_time_window <- fish_time %>%
+  filter(m.rel.sr >= 0,
+         m.rel.ss >= 0)
+
+# all fish passing sunrise to 30 min after sunset
+length(fish_time_window30$m.rel.ss)/length(fish_time$m.rel.ss) # 94.2%
+# all fish passing sunrise to sunset
+length(fish_time_window$m.rel.ss)/length(fish_time$m.rel.ss) # 91.5%
+
+# remove all dataframes
+rm(fish_time, fish_time_window, fish_time_window30, shad_time, shad_time_window, shad_time_window30, herring_time, herring_time_window, herring_time_window30)
 ```
 
 # % hours with pings during each day
@@ -1022,12 +1092,90 @@ plot_antenna_pct_hrs_active(data2018)
 plot_antenna_pct_hrs_active(data2019)
 ```
 
-
-
+# % hours at least 1 antenna active during peak fish time
 ```{r}
+calc_antenna_cover <- function(ping_data){
+  
+  # get year
+  the_year <- as.numeric(unique(ping_data$year))
+  
+  # make data frame of 1st tagging dates
+    first_day <- tags %>% 
+    mutate(year = year(tag_time),
+           jul = yday(tag_time)) %>%
+    group_by(year) %>%
+    summarise(first_day = min(jul)) %>%
+    mutate(date = c("Apr 27", "Apr 26", "Apr 14", "Apr 13", 
+                    "Apr 6", "Apr 12", "Apr 10", "Apr 10"))
+  
+  peak_fish <- v_time_hist %>%
+    filter(year == the_year,
+           is.na(ord) == F) %>%
+    summarise(q5 = quantile(ord, 0.05),
+              q95 = quantile(ord, 0.95),
+              n = length(ord))
+  
+  # for 2012, where no video data exists (use mean "peak fish" days)
+  if(peak_fish$n == 0){peak_fish$q5 <- 101; peak_fish$q95 <- 146}
+  
+  the_first_day <- filter(first_day, year == the_year)$first_day
+  
+  ant_cover <- ping_data %>%
+    mutate(day = yday(datetime),
+           hr = lubridate::hour(datetime),
+           antenna = case_when(antenna == "A1" ~ "A1 (entrance)",
+                               antenna == "A4" ~ "A4 (exit)",
+                               TRUE ~ antenna)) %>%
+    group_by(day, hr, antenna) %>%
+    tally() %>%
+    arrange(antenna, day, hr) %>%
+    mutate(n1 = ifelse(n >= 3, 1, 0)) %>%
+    group_by(day, hr) %>%
+    summarize(one_ant = max(n1),
+              .groups = "drop") %>%
+    group_by(day) %>%
+    summarize(pct = 100*sum(one_ant)/24,
+              .groups = "drop") %>%
+    filter(day >= peak_fish$q5,
+           day >= the_first_day,
+           day <= peak_fish$q95
+           ) %>%
+    summarize(mean_pct = mean(pct),
+              n_days = length(pct),
+              from = min(day),
+              to = max(day)) %>%
+    mutate(year = the_year,
+           ant_in = the_first_day,
+           peak_fish_start = peak_fish$q5,
+           peak_fish_end = peak_fish$q95
+           )
 
+  return(ant_cover)
+  
+}
 
+# Plot pings/day by antenna to check antenna coverage
 
+antenna_cover <- bind_rows(
+calc_antenna_cover(data2012),
+calc_antenna_cover(data2013),
+calc_antenna_cover(data2014),
+calc_antenna_cover(data2015),
+calc_antenna_cover(data2016),
+calc_antenna_cover(data2017),
+calc_antenna_cover(data2018),
+calc_antenna_cover(data2019)
+)
 
+antenna_cover
+summary(antenna_cover$mean_pct)
+
+antenna_cover <- antenna_cover %>%
+  mutate(weighted = (mean_pct/100) * n_days)
+
+# calculate the pooled % of time covered across all years
+sum(antenna_cover$weighted)/sum(antenna_cover$n_days)
+
+write.csv(antenna_cover,
+          "output/calc_antenna_coverage.csv", row.names = F)
 ```
-
