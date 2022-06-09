@@ -322,7 +322,7 @@ fish_mod_new <- jagsUI::jags(
 fish_mod_new
 # saveRDS(fish_mod_new, "other/output/fish_jags_mod_060122a_logit_all_converged.rds")
 ```
-# Plot model output - logit, 052022k
+# Plot model output - logit
 ```{r}
 # new version with 1 herring passed
 fish_mod <- readRDS(here(
@@ -697,9 +697,10 @@ ggsave("other/figures/passage_time_boxplot4.png",
 table(fish_sum$species) 
 # 26 shad, 5 herring
 table(tags$Common.Name) 
-# 163 herring = 37 alewife, 50 river herring, 76 blueback
-# Anthony edited this in the ms to 167 
-# (+ 4 fish found in records, not in tagging database)
+# 164 herring = 37 alewife, 50 river herring, 77 blueback
+# Anthony had edited this in the ms to 167 
+# (+ 3 fish found in records, not in tagging database)
+# (but no tag number known for those 3... omitted)
 # 51 shad
 
 # shad attract
@@ -743,16 +744,15 @@ length(fish_sum_transit_shad$transit.days) # 20
 
 # shad passage
 fish_sum_passage_shad <- fish_sum %>%
-  filter(attraction.days < 300,
-         is.na(passage.days) == F,
+  filter(is.na(passage.days) == F,
          grepl(species, pattern = "American Shad")) %>%
   select(species, passage.days)
 
 summary(fish_sum_passage_shad$passage.days) #
   #  Min. 1st Qu. Median  Mean 3rd Qu.  Max. 
-  #  0.373  5.299  6.824  7.746  9.233 20.884 
-sd(fish_sum_passage_shad$passage.days) # 5.023
-length(fish_sum_passage_shad$passage.days) # 20
+ # 0.373  5.3057  6.846   8.199  9.589  20.884
+ sd(fish_sum_passage_shad$passage.days) # 5.318
+length(fish_sum_passage_shad$passage.days) # 21
 
 ### Herring
 
