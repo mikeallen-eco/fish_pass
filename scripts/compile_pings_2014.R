@@ -123,7 +123,7 @@ data2014 <- do.call(rbind, file_data_list) %>%
                                       TRUE ~ antenna_original)) %>%
   # filtering out 20 corrupt tag numbers - ultimately should be reviewed
   # this is issue # 14 on GitHub. They all contain \'s and an L
-  filter(grepl(tag_short, pattern = "L") == F) %>%
+  filter(grepl(iconv(tag_short, from = "", to = "UTF-8"), pattern = "L") == F) %>%
   # remove a single record from 2017 (tag 0000_0000000180843403)
   filter(year(date) != 2017) %>%
   # fix antenna names based on IFW Antenna Key.xlsx file info

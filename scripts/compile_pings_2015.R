@@ -1,3 +1,12 @@
+### NOTE: changed "fileEncoding = "437" in read.table below so it would work on new Mac
+### based on this: https://stackoverflow.com/questions/4806823/how-to-detect-the-right-encoding-for-read-csv
+### might need to change for it to work on another machine
+### USED THIS TO DEBUG PROBLEM WITH ENCODING FOLLOWING THE WEBSITE ABOVE
+# codepages <- setNames(iconvlist(), iconvlist())
+# x <- lapply(codepages, function(enc) try(read.table(filepath,
+#                                                     fileEncoding=enc,
+#                                                     nrows=3, header=TRUE, sep="\t"))) # you get lots of errors/warning here
+
 # Packages
 library(dplyr)
 library(ggplot2)
@@ -24,7 +33,7 @@ for(i in 1:length(files)){
                                                "tag", "antenna", 
                                                "unknown3", "unknown4",
                                                paste("extra", 1:5, sep="")),
-                         fill=T, as.is=T, na.strings="") %>%
+                         fill=T, as.is=T, na.strings="", fileEncoding = "437") %>%
     # Type: D (data) or E (error/info) or B (bad - only one file)
     filter(type == "D")
   
