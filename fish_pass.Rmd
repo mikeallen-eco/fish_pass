@@ -88,6 +88,21 @@ source("scripts/compile_pings_2017.R")
 source("scripts/compile_pings_2018.R")
 source("scripts/compile_pings_2019.R")
 
+### in case there is a problem compiling the text files (the source commands above)
+### then load these files in from output folder
+### I encountered a problem with 2014 and 2015 due to "multibyte" text when switching to Mac
+### I added code using iconv(x, from = "", to = "UTF-8) in 2014
+### and also fileEncoding = "437" in 2015 
+### might need to reverse or alter these to get them to work on other machines
+# data2012 <- readRDS("output/data2012.rds")
+# data2013 <- readRDS("output/data2013.rds")
+# data2014 <- readRDS("output/data2014.rds")
+# data2015 <- readRDS("output/data2015.rds")
+# data2016 <- readRDS("output/data2016.rds")
+# data2017 <- readRDS("output/data2017.rds")
+# data2018 <- readRDS("output/data2018.rds")
+# data2019 <- readRDS("output/data2019.rds")
+
 # Extracting & summarizing fish tag data
 fish2012_sum <- fishsum(data2012)
 fish2013_sum <- fishsum(data2013)
@@ -116,11 +131,16 @@ f <- tags %>%
                             "Blueback Herring",
                             "Blueback herring",
                             "Alewife")) %>%
-  left_join(select(fish_sum, year = detect_year, tag_short, passage.days), by = "tag_short") %>%
+  left_join(select(fish_sum, year = detect_year, tag_short, 
+                   attraction.days, passage.days), by = "tag_short") %>%
   # remove 1 herring tagged in 2014 but only detected in 2015
-  mutate(passage.days = case_when(passage.days > 300 ~ NaN,
-                                  TRUE ~ passage.days)) %>%
-  mutate(passage = case_when(is.na(passage.days) ~ 0,
+  mutate(passage.days = case_when(passage.days > 300 ~ NA,
+                                  TRUE ~ passage.days),
+         attraction.days = case_when(attraction.days > 300 ~ NA,
+                                  TRUE ~ attraction.days)) %>%
+  mutate(reach = case_when(is.na(attraction.days) ~ 0,
+                               TRUE ~ 1),
+         passage = case_when(is.na(passage.days) ~ 0,
                                TRUE ~ 1),
          year = as.factor(case_when(is.na(year) ~ year(tag_time),
                           TRUE ~ year)),
@@ -143,11 +163,17 @@ shad_raw_sum <- cbind.data.frame(
                      by = list(shad_df$year), length),
   successes = aggregate(shad_df$passage, 
                         by = list(shad_df$year), sum)[,2],
-  prop = aggregate(shad_df$passage, by = list(shad_df$year), mean)[,2]
+  prop = aggregate(shad_df$passage, by = list(shad_df$year), mean)[,2],
+  successes.reach = aggregate(shad_df$reach, 
+                        by = list(shad_df$year), sum)[,2],
+  prop.reach = aggregate(shad_df$reach, by = list(shad_df$year), mean)[,2]
   ) %>%
   mutate(year = as.numeric(as.character(trials.Group.1)),
          species = "American Shad") %>%
   select(-trials.Group.1)
+# fix the one case where a shad passed through, but was not detected at first antenna 
+  # (i.e., was not recorded as 'reaching' antenna 1)
+shad_raw_sum[3,]$successes.reach <- 1
 
 # examine herring data
 herring_raw_sum <- cbind.data.frame(
@@ -155,7 +181,10 @@ herring_raw_sum <- cbind.data.frame(
                      by = list(herring_df$year), length),
   successes = aggregate(herring_df$passage, 
                         by = list(herring_df$year), sum)[,2],
-  prop = aggregate(herring_df$passage, by = list(herring_df$year), mean)[,2]
+  prop = aggregate(herring_df$passage, by = list(herring_df$year), mean)[,2],  
+  successes.reach = aggregate(herring_df$reach, 
+                        by = list(herring_df$year), sum)[,2],
+  prop.reach = aggregate(herring_df$reach, by = list(herring_df$year), mean)[,2]
   ) %>%
   mutate(year = as.numeric(as.character(trials.Group.1)),
          species = "Herring spp.") %>%
@@ -176,7 +205,7 @@ shad_data <- list(
 
 # combine raw data summaries
 both <- rbind(shad_raw_sum, herring_raw_sum) %>%
-  select(N = trials.x, z = successes, -prop, year) %>%
+  select(N = trials.x, z = successes, z.reach = successes.reach, -prop, year) %>%
   mutate(year = as.numeric(as.factor(year)),
          fish = c(rep(1,7), rep(2,8)),
          fishyears = 1:15) 
@@ -190,6 +219,7 @@ fish_jags_data <- list(
   nfish = nfish,
   nfishyears = nfishyears,
   z = both$z,
+  z.reach = both$z.reach,
   N = both$N,
   c = both$fish,
   fallback_detect = c(rep(1,33), rep(0,106)),
@@ -283,7 +313,42 @@ fallback_p_cor <- fallback_p / 0.5
 "
 )
 ```
-# Run model
+# JAGS model for fish "attraction" proportion (p that reach the ladder)
+logit-normal with hyperparameter for each fish
+```{r}
+
+cat(file = "scripts/fish_mod_logit_reach.txt",
+"
+model{
+for(s in 1:nfishyears){
+  z.reach[s] ~ dbin(ilogit(lp[s]), N[s])
+  lp[s] ~ dnorm(mu_logit_p[c[s]], tau_logit_p[c[s]] )
+  logit(p[s]) <- lp[s]
+}  
+
+for( c in 1:nfish){
+mu_logit_p[c] ~ dnorm(0, 0.001)
+tau_logit_p[c] ~ dgamma(0.001, 0.001)
+logit(mu_p[c]) <- mu_logit_p[c]
+}
+
+# passage given reached (shad only)
+for(s in 1:7){
+  z[s] ~ dbin(ilogit(lp2[s]), z.reach[s])
+  lp2[s] ~ dnorm(mu_logit_p2, tau_logit_p2)
+  logit(p2[s]) <- lp2[s]
+}  
+
+mu_logit_p2 ~ dnorm(0, 0.001)
+tau_logit_p2 ~ dgamma(0.001, 0.001)
+logit(mu_p2) <- mu_logit_p2
+
+
+}
+"
+)
+```
+# Run passage model
 ```{r}
 fish_mod_new <- jagsUI::jags(
   data = fish_jags_data,
@@ -291,11 +356,6 @@ fish_mod_new <- jagsUI::jags(
   n.iter = 1000000,
   n.burnin = 500000,
   parameters.to.save = c(
-    "theta",
-    "omega",
-    "kappa",
-    "S0",
-    "R0",
     "p",
     "mu_p",
     "mu_logit_p",
@@ -322,7 +382,39 @@ fish_mod_new <- jagsUI::jags(
 fish_mod_new
 # saveRDS(fish_mod_new, "other/output/fish_jags_mod_060122a_logit_all_converged.rds")
 ```
-# Plot model output - logit
+# Run "reached" and "passed given reached" models 
+fraction of fish that reached ladder, and that passed given that they reached it (shad only)
+```{r}
+fish_mod_reach <- jagsUI::jags(
+  data = fish_jags_data,
+  model.file = "scripts/fish_mod_logit_reach.txt",
+  n.iter = 1000000,
+  n.burnin = 500000,
+  parameters.to.save = c(
+    "p",
+    "mu_p",
+    "mu_logit_p",
+    "tau_logit_p",
+    "lp",
+    "p2",
+    "mu_p2",
+    "mu_logit_p2",
+    "tau_logit_p2",
+    "lp2"
+  ),
+  n.chains = 3,
+  parallel = T,
+  n.thin = 200,
+  inits = function()
+    list(
+      lp = c(rnorm(7, 0, 0.1),
+             rnorm(8, -10, 0.1))
+    )
+)
+fish_mod_reach
+# saveRDS(fish_mod_reach, "other/output/fish_jags_mod_reach_021924_logit_all_converged.rds")
+```
+# Create Figure 4 - Plot model output - logit
 ```{r}
 # new version with 1 herring passed
 fish_mod <- readRDS(here(
@@ -352,18 +444,32 @@ shad_n <-
     n_label = "0"
   )
 
+# fix herring name in "raw_sum"
+raw_sum2 <- raw_sum %>%
+  mutate(species = case_when(species == "Herring spp." ~ "River Herring",
+                             TRUE ~ species))
+
+# make vector of fallback draws
+fallback_vector <- tidybayes::gather_draws(fish_mod, fallback_p_cor)$.value
+
 thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
+  mutate(theta.cor = .value/fallback_vector) %>%
   group_by(i) %>%
   summarise(
     theta_mean = mean(.value),
     theta_q2.5 = quantile(.value, .025),
     theta_q97.5 = quantile(.value, .975),
     theta_q10 = quantile(.value, .1),
-    theta_q90 = quantile(.value, .9)
+    theta_q90 = quantile(.value, .9),
+    theta.cor_mean = mean(theta.cor),
+    theta.cor_q2.5 = quantile(theta.cor, .025),
+    theta.cor_q97.5 = quantile(theta.cor, .975),
+    theta.cor_q10 = quantile(theta.cor, .1),
+    theta.cor_q90 = quantile(theta.cor, .9)
   ) %>%
   mutate(year = c(2012:2017, 2019, 2012:2019),
-         species = c(rep("American Shad", 7), rep("Herring spp.", 8))) %>%
-  left_join(raw_sum) %>%
+         species = c(rep("American Shad", 7), rep("River Herring", 8))) %>%
+  left_join(raw_sum2) %>%
   mutate(x = c(rep(1.05, 7), rep(.09, 8)),
          n_label = paste0(c(rep("", 6),"n =",
                             rep("", 7),"n ="), trials.x)) %>%
@@ -378,14 +484,21 @@ omegas <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
     omega_q10 = quantile(.value, .1),
     omega_q90 = quantile(.value, .9)
   ) %>%
-  mutate(species = c("American Shad", "Herring spp."))
+  mutate(species = c("American Shad", "River Herring"))
 
 # for shad 2018 point
 shad_2018 <- omegas %>%
   filter(species == "American Shad") %>%
   mutate(year = 2018)
 
+# for corrected herring values
+herring.cor <- thetas %>%
+  filter(species == "River Herring")
+
 thetas %>%
+  mutate(yearmid = year,
+         year = case_when(species == "River Herring" ~ year-0.15,
+                          TRUE ~ year)) %>%
   ggplot() +
   geom_vline(
     data = omegas,
@@ -425,14 +538,234 @@ thetas %>%
                 size = 1,
                 width = 0,
                 data = shad_2018) +
+  # add CI bars for the corrected passage rate
+  geom_errorbar(aes(xmin = theta.cor_q2.5,
+                    xmax = theta.cor_q97.5,
+                    y = year+0.25), width = 0,
+                data = herring.cor, color = "darkgray") +
+  geom_errorbar(aes(xmin = theta.cor_q10,
+                    xmax = theta.cor_q90,
+                    y = year+0.25),
+                size = 1,
+                width = 0,
+                data = herring.cor, color = "darkgray") +
   geom_point(aes(x = theta_mean,
                  y = year), size = 4) +
   geom_point(aes(y = year, x = omega_mean),
              size = 4, data = shad_2018) +
+  geom_point(aes(y = year+0.25, x = theta.cor_mean),
+             size = 4, data = herring.uncor, color = "darkgray") +
   facet_wrap( ~ species, scales = "free") +
   # scale_x_continuous(#limits = c(0, 1.1),
   #                    breaks = seq(0, 1, 0.2)) +
-  scale_y_continuous(breaks = 2012:2019) +
+  scale_y_continuous(breaks = 2012:2019,
+                     limits = c(2011.75, 2019.25)) +
+  theme_bw() +
+  theme(text = element_text(size = 14)) +
+  labs(y = "", x = "Passage rate") +
+  geom_point(aes(x = prop, y = yearmid),
+             shape = "x",
+             color = "red",
+             size = 4) +
+  geom_text(aes(x = x, y = yearmid, 
+                label = n_label),
+            nudge_x = .02,
+            color = "darkgray",
+            hjust = 1)
+
+# ggsave(
+#   "other/figures/Figure4_20240219d.png",
+#   width = 7,
+#   heigh = 5,
+#   dpi = 600
+# )
+# fig previously named: jags_nofishhypers_logit_allconverged_run060122a.png
+```
+# Create Figure 4 - Plot model output - logit (3-panel version)
+```{r}
+# new version with 1 herring passed
+fish_mod <- readRDS(here(
+  "other",
+  "output",
+  "fish_jags_mod_060122a_logit_all_converged.rds"
+))
+
+# dev.new()
+# plot(fish_mod)
+
+# for 2018 shad n annotation
+shad_n <-
+  data.frame(
+    i = 16,
+    theta_mean = NA,
+    theta_q2.5 = NA,
+    theta_q97.5 = NA,
+    theta_q10 = NA,
+    theta_q90 = NA,
+    year = 2018,
+    species = "American Shad",
+    trials.x = 0,
+    successes = 0,
+    prop = NA,
+    x = 1.05,
+    n_label = "0"
+  )
+
+# fix herring name in "raw_sum"
+raw_sum2 <- raw_sum %>%
+  mutate(species = case_when(species == "Herring spp." ~ "River Herring",
+                             TRUE ~ species))
+
+# make vector of fallback draws
+fallback_vector <- tidybayes::gather_draws(fish_mod, fallback_p_cor)$.value
+
+thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
+  mutate(theta.cor = .value/fallback_vector) %>%
+  group_by(i) %>%
+  summarise(
+    theta_mean = mean(.value),
+    theta_q2.5 = quantile(.value, .025),
+    theta_q97.5 = quantile(.value, .975),
+    theta_q10 = quantile(.value, .1),
+    theta_q90 = quantile(.value, .9),
+    theta.cor_mean = mean(theta.cor),
+    theta.cor_q2.5 = quantile(theta.cor, .025),
+    theta.cor_q97.5 = quantile(theta.cor, .975),
+    theta.cor_q10 = quantile(theta.cor, .1),
+    theta.cor_q90 = quantile(theta.cor, .9)
+  ) %>%
+  mutate(year = c(2012:2017, 2019, 2012:2019),
+         species = c(rep("American Shad", 7), rep("River Herring", 8))) %>%
+  left_join(raw_sum2) %>%
+  mutate(x = c(rep(1.05, 7), rep(.09, 8)),
+         n_label = paste0(c(rep("", 6),"n =",
+                            rep("", 7),"n ="), trials.x)) %>%
+  bind_rows(shad_n)
+
+omegas <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
+  mutate(omega.cor = .value/fallback_vector) %>%
+  group_by(i) %>%
+  summarise(
+    omega_mean = mean(.value),
+    omega_q2.5 = quantile(.value, .025),
+    omega_q97.5 = quantile(.value, .975),
+    omega_q10 = quantile(.value, .1),
+    omega_q90 = quantile(.value, .9),    
+    omega.cor_mean = mean(omega.cor),
+    omega.cor_q2.5 = quantile(omega.cor, .025),
+    omega.cor_q97.5 = quantile(omega.cor, .975),
+    omega.cor_q10 = quantile(omega.cor, .1),
+    omega.cor_q90 = quantile(omega.cor, .9)
+  ) %>%
+  mutate(species = c("American Shad", "River Herring"))
+
+# for shad 2018 point
+shad_2018 <- omegas %>%
+  filter(species == "American Shad") %>%
+  mutate(year = 2018)
+
+# for corrected herring values
+herring.theta.cor <- thetas %>%
+  filter(species == "River Herring") %>%
+  mutate(species = "River Herring\n(fallback adjusted)") %>%
+  select(theta.cor_mean:n_label) %>%
+  rename(theta_mean = theta.cor_mean, 
+         theta_q2.5 = theta.cor_q2.5, 
+         theta_q97.5 = theta.cor_q97.5, 
+         theta_q10 = theta.cor_q10, 
+         theta_q90 = theta.cor_q90)
+
+herring.omega.cor <- omegas %>%
+  filter(species == "River Herring") %>%
+  mutate(species = "River Herring\n(fallback adjusted)") %>%
+  select(omega_mean = omega.cor_mean,
+         omega_q2.5 = omega.cor_q2.5,
+         omega_q97.5 = omega.cor_q97.5,
+         omega_q10 = omega.cor_q10,
+         omega_q90 = omega.cor_q90,
+         species)
+
+# bind together shad, herring, and herring (corrected) data for plotting all together
+thetas3 <- thetas %>%
+  select(theta_mean:theta_q90, year:n_label) %>%
+  bind_rows(herring.theta.cor)
+# replace NA 2018 values for American Shad with overall mean (omega) values
+thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_mean <- shad_2018$omega_mean
+thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_q2.5 <- shad_2018$omega_q2.5
+thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_q97.5 <- shad_2018$omega_q97.5
+thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_q10 <- shad_2018$omega_q10
+thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_q90 <- shad_2018$omega_q90
+
+# bind together shad, herring, and herring (corrected) overall mean (omega) data for plotting all together
+omegas3 <- omegas %>%
+  select(omega_mean:omega_q90, species) %>%
+  bind_rows(herring.omega.cor)
+
+thetas3 %>%
+  # mutate(yearmid = year,
+  #        year = case_when(species == "River Herring" ~ year-0.15,
+  #                         TRUE ~ year)) %>%
+  ggplot() +
+  geom_vline(
+    data = omegas3,
+    aes(xintercept = omega_mean),
+    size = 0.5,
+    color = "red"
+  ) +
+  geom_vline(
+    data = omegas3,
+    aes(xintercept = omega_q2.5),
+    size = 0.5,
+    color = "red",
+    lty = 2
+  ) +
+  geom_vline(
+    data = omegas3,
+    aes(xintercept = omega_q97.5),
+    size = 0.5,
+    color = "red",
+    lty = 2
+  ) +
+  geom_errorbar(aes(xmin = theta_q2.5,
+                    xmax = theta_q97.5,
+                    y = year), width = 0) +
+  geom_errorbar(aes(xmin = theta_q10,
+                    xmax = theta_q90,
+                    y = year),
+                size = 1,
+                width = 0) +
+  # geom_errorbar(aes(xmin = omega_q2.5,
+  #                   xmax = omega_q97.5,
+  #                   y = year), width = 0,
+  #               data = shad_2018) +
+  # geom_errorbar(aes(xmin = omega_q10,
+  #                   xmax = omega_q90,
+  #                   y = year),
+  #               size = 1,
+  #               width = 0,
+  #               data = shad_2018) +
+  # add CI bars for the corrected passage rate
+  # geom_errorbar(aes(xmin = theta.cor_q2.5,
+  #                   xmax = theta.cor_q97.5,
+  #                   y = year+0.25), width = 0,
+  #               data = herring.cor, color = "darkgray") +
+  # geom_errorbar(aes(xmin = theta.cor_q10,
+  #                   xmax = theta.cor_q90,
+  #                   y = year+0.25),
+  #               size = 1,
+  #               width = 0,
+  #               data = herring.cor, color = "darkgray") +
+  geom_point(aes(x = theta_mean,
+                 y = year), size = 4) +
+  # geom_point(aes(y = year, x = omega_mean),
+  #            size = 4, data = shad_2018) +
+  # geom_point(aes(y = year+0.25, x = theta.cor_mean),
+  #            size = 4, data = herring.uncor, color = "darkgray") +
+  facet_wrap( ~ species, scales = "free") +
+  # scale_x_continuous(#limits = c(0, 1.1),
+  #                    breaks = seq(0, 1, 0.2)) +
+  scale_y_continuous(breaks = 2012:2019,
+                     limits = c(2011.75, 2019.25)) +
   theme_bw() +
   theme(text = element_text(size = 14)) +
   labs(y = "", x = "Passage rate") +
@@ -446,16 +779,15 @@ thetas %>%
             color = "darkgray",
             hjust = 1)
 
-
-
 ggsave(
-  "other/figures/jags_nofishhypers_logit_allconverged_run060122a.png",
-  width = 7,
+  "other/figures/Figure4_20240219e.png",
+  width = 10.5,
   heigh = 5,
-  dpi = 400
+  dpi = 600
 )
+# fig previously named: jags_nofishhypers_logit_allconverged_run060122a.png
 ```
-# Video time series 
+# Create Figure 5 - Run size based on video time series & passage rates
 ```{r}
 # Match up year time series with 
 fish_mod <- readRDS(here("other",
@@ -475,11 +807,11 @@ theta_draws <- tidybayes::gather_draws(fish_mod, p[i]) %>%
             by = "i") %>%
   ungroup() %>%
   mutate(species = c(rep("American Shad", 7*iter), 
-                     rep("River Herring spp.", 8*iter)),
+                     rep("River Herring", 8*iter)),
          fallback = rep(fallback_vector, 15),
          pass_cor = case_when(species == "American Shad" ~
                                 .value,
-                              species == "River Herring spp." ~
+                              species == "River Herring" ~
                                 .value/fallback),
          pass_cor2 = .value/.47) 
 
@@ -528,7 +860,7 @@ omega_draws_temp_herring <- mutate(omega_draws_temp,
   bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
   bind_rows(mutate(omega_draws_temp, year = 2020)) %>%
   bind_rows(mutate(omega_draws_temp, year = 2021)) %>%
-  mutate(species = "River Herring spp.",
+  mutate(species = "River Herring",
          fallback = rep(fallback_vector, 12),
          pass_cor = .value/fallback,
          pass_cor2 = .value/.47)
@@ -540,13 +872,18 @@ rm(omega_draws_temp,
    omega_draws_temp_shad, 
    omega_draws_temp_herring)
 
+# fix name of River Herring for plotting
+v_River_Herring <- v %>%
+  mutate(species = case_when(species == "River Herring spp." ~ "River Herring",
+                             TRUE ~ species))
+
 # join posterior draws to fish counts
 fish_n_draws <- theta_draws %>%
   # add in global average (omega) passage draws for shad
   # in 2018 with no passage data  
   bind_rows(omega_draws) %>%
   # join with video count data
-  left_join(v) %>%
+  left_join(v_River_Herring) %>%
   filter(is.na(n) != TRUE) %>% # remove years with no counts
   arrange(species, year) %>%
   mutate(pass_cor_trunc = ifelse(pass_cor >=1, 1, pass_cor),
@@ -564,7 +901,7 @@ fish_n <- fish_n_draws %>%
             n = mean(n),
             .groups = "keep") %>%
   bind_rows(data.frame(species = c("American Shad",
-                                    "River Herring spp."),
+                                    "River Herring"),
                         year = rep(c(2000, 2004, 2006:2012),2),
                         nhat_med = NA,
                         nhat_q2.5 = NA,
@@ -574,11 +911,11 @@ fish_n <- fish_n_draws %>%
                         n = NA)) %>%
   arrange(species, year) %>%
   mutate(nhat_q90 = 
-           case_when(species == "River Herring spp." ~
+           case_when(species == "River Herring" ~
                                 nhat_med,
                               TRUE ~ nhat_q90),
          nhat_q97.5 = 
-           case_when(species == "River Herring spp." ~
+           case_when(species == "River Herring" ~
                                 nhat_med,
                               TRUE ~ nhat_q97.5))
 
@@ -618,19 +955,31 @@ fish_n %>%
   theme(strip.background = element_rect(fill="white")) +
   labs(x = "", y = "Run size (n)")
 
-ggsave("other/figures/run_size_passage_cor_uncertainfallback_run060122a_logit_20220601_newdata.png",
-       height = 4, width = 7,
-       dpi = 400)
+# ggsave("other/figures/Figure5.png",
+#        height = 4, width = 7,
+#        dpi = 600)
+
+# figure previously named: run_size_passage_cor_uncertainfallback_run060122a_logit_20220601_newdata.png
+
+# get corrected passage rate
+omega_draws %>% 
+  filter(species == "River Herring",
+  year == 2021) %>%
+  group_by(species, year) %>% 
+  summarize(meanpass = mean(.value), 
+            cor = mean(pass_cor),
+            cor_l = quantile(pass_cor, 0.025),
+            cor_u = quantile(pass_cor, 0.975))
 
 ```
-# Attraction, staging, passage times
+# Create Figure 2 - Attraction, staging, passage times
 ```{r}
 fish_sum_plot = fish_sum %>%
   mutate(sp_cat = case_when(species %in% 
                               c("Blueback Herring", 
                                 "River Herring",
                                 "Alewife") ~
-                              "River Herring spp.",
+                              "River Herring",
                             species == "American Shad" ~
                               "American Shad",
                             TRUE ~ "NA")) %>%
@@ -686,9 +1035,11 @@ ggplot() +
   scale_color_manual(values = c("steelblue", "darkgreen"))
   
 
-ggsave("other/figures/passage_time_boxplot4.png",
+ggsave("other/figures/Figure2.png",
        height = 4, width = 7,
-       dpi = 400)
+       dpi = 600)
+
+# figure previously named: passage_time_boxplot4.png
 ```
 # Summarizing passage metrics
 ```{r}
@@ -815,7 +1166,7 @@ fish_sum_sum_y2 <- fish_sum %>%
          grepl(species, pattern = "Herring|American Shad"))
 
 ```
-# Stairstep figure
+# Create Figure 3 - Stairstep figure
 ```{r}
 
 stairs <- fish_sum %>%
@@ -881,8 +1232,9 @@ stairs %>%
         strip.background = element_rect(fill = "white")) +
   labs(x = "", y = "Number of individuals")
 
-# ggsave("figures/stairstep_20220601.png", width = 7, height = 5, dpi = 400)
+# ggsave("other/figures/Figure3.png", width = 7, height = 5, dpi = 600)
 
+# figure previously named: stairstep_20220601.png
 ```
 
 # Histogram of fish counts timing (by hour)
@@ -909,7 +1261,7 @@ v_time_hist %>%
 ggsave("figures/fish_counts_by_hour_histograms.png", 
        width = 7, height = 4, dpi = 400)
 ```
-# Histogram of fish counts timing relative to sunrise/sunset
+# Create Figure S1 - Histogram of fish counts timing relative to sunrise/sunset
 ```{r}
 
 p.day.plot <- v_time_hist %>%
@@ -920,7 +1272,9 @@ p.day.plot <- v_time_hist %>%
   summarize(n = length(p.daylight),
             .groups = "drop") %>%
   group_by(species, y2013) %>%
-  mutate(p = n / sum(n))
+  mutate(p = n / sum(n),
+         species = case_when(species == "River Herring spp." ~ "River Herring",
+                             TRUE ~ species))
 
 ggplot(p.day.plot) +
   geom_col(aes(x = bin, y=p*100),
@@ -943,21 +1297,25 @@ ggplot(p.day.plot) +
            label = "Sunset", size = 2, 
            color = "white", hjust = 0) +
   facet_grid(y2013~species) +
+  scale_x_discrete(labels = c(50,40,30,20,10,
+                                0,10,20,30,40,50,
+                                60,70,80,90,100,
+                                10,20,30,40,50))+
+    #breaks = seq(-50,150, by = 10)) +
   theme_classic() +
   theme(text = element_text(size = 14),
         strip.background = element_rect(fill = "white"),
-        axis.text.x = element_blank()) +
-  labs(x = "Time relative to sunrise and sunset", y = "% of individuals counted")
+        axis.text.x = element_text(size = 7)) + # axis.text.x = element_blank()
+  labs(x = "Time relative to sunrise and sunset (percentiles)", y = "% of individuals counted")
 
-ggsave("figures/fish_counts_by_relative_sr_ss_histograms.png", 
-       width = 7, height = 4, dpi = 400)
+# ggsave("other/figures/FigureS1.png",
+#        width = 7, height = 4, dpi = 600)
 
+# figure previously named: fish_counts_by_relative_sr_ss_histograms_axlabs4.png
 p.day.plot %>% filter(bin %in% seq(100,160, 10)) %>% group_by(species, y2013) %>% summarise(sump = sum(p))
 
 p.day.plot %>% filter(bin %in% seq(100,160, 10)) %>% group_by(species, y2013) %>% summarise(sump = sum(p))
 ```
-
-
 # calculate metrics about when fish pass
 For reference: in 2013 there was 1 fish (0.2%) counted > 60 min after sunset; 6 (2%) counted >45 min after sunset;  14 (4%) counted >30 min after; and 27 (8%) counted anytime after sunset.
 ```{r}
@@ -1023,7 +1381,6 @@ length(fish_time_window$m.rel.ss)/length(fish_time$m.rel.ss) # 91.5%
 # remove all dataframes
 rm(fish_time, fish_time_window, fish_time_window30, shad_time, shad_time_window, shad_time_window30, herring_time, herring_time_window, herring_time_window30)
 ```
-
 # % hours with pings during each day
 ```{r}
 
@@ -1055,7 +1412,8 @@ plot_antenna_pct_hrs_active <- function(ping_data){
     mutate(n1 = ifelse(n >= 3, 1, 0)) %>%
     group_by(antenna, day) %>%
     summarize(pct = 100*sum(n1)/24,
-              .groups = "drop")
+              .groups = "drop") %>%
+    filter(antenna != "unknown")
 
    antenna_plot <-
     ggplot(plot_data) +
@@ -1076,7 +1434,7 @@ plot_antenna_pct_hrs_active <- function(ping_data){
   
  ggsave(here("figures", paste0(stringr::str_sub(year(ping_data$date[1])), 
                                 "_antenna_pct_hrs_active.png")), 
-         height = 4, width = 7, dpi = 400)
+         height = 4, width = 7, dpi = 600)
   
   return(antenna_plot)
 }
@@ -1090,6 +1448,84 @@ plot_antenna_pct_hrs_active(data2016)
 plot_antenna_pct_hrs_active(data2017)
 plot_antenna_pct_hrs_active(data2018)
 plot_antenna_pct_hrs_active(data2019)
+
+### special code to plot 2012 and 2014 together (A4 antenna only)
+
+# plot # pings/day by antenna to check antenna coverage
+# make a function to plot pings/day by antenna for a given year
+  
+  # make data frame of 1st tagging dates
+    first_day <- tags %>% 
+    mutate(year = year(tag_time),
+           jul = yday(tag_time)) %>%
+    group_by(year) %>%
+    summarise(first_day = min(jul)) %>%
+    mutate(date = c("Apr 27", "Apr 26", "Apr 14", "Apr 13", 
+                    "Apr 6", "Apr 12", "Apr 10", "Apr 10"))
+    
+    plot_data12 <- data2012 %>%
+      mutate(
+        day = yday(datetime),
+        hr = lubridate::hour(datetime),
+        antenna = case_when(
+          antenna == "A1" ~ "A1 (entrance)",
+          antenna == "A4" ~ "A4 (exit)",
+          TRUE ~ antenna
+        )
+      ) %>%
+      group_by(day, hr, antenna) %>%
+      tally() %>%
+      arrange(antenna, day, hr) %>%
+      mutate(n1 = ifelse(n >= 3, 1, 0)) %>%
+      group_by(antenna, day) %>%
+      summarize(pct = 100 * sum(n1) / 24,
+                .groups = "drop") %>%
+      filter(antenna == "A4 (exit)") %>%
+      mutate(antenna = "2012 (A4, exit)")
+    
+    plot_data13 <- data2013 %>%
+      mutate(
+        day = yday(datetime),
+        hr = lubridate::hour(datetime),
+        antenna = case_when(
+          antenna == "A1" ~ "A1 (entrance)",
+          antenna == "A4" ~ "A4 (exit)",
+          TRUE ~ antenna
+        )
+      ) %>%
+      group_by(day, hr, antenna) %>%
+      tally() %>%
+      arrange(antenna, day, hr) %>%
+      mutate(n1 = ifelse(n >= 3, 1, 0)) %>%
+      group_by(antenna, day) %>%
+      summarize(pct = 100 * sum(n1) / 24,
+                .groups = "drop") %>%
+      filter(antenna == "A4 (exit)") %>%
+      mutate(antenna = "2013 (A4, exit)")
+    
+    plot_data <- plot_data12 %>%
+      bind_rows(plot_data13)
+
+(   antenna_plot <-
+    ggplot(plot_data) +
+    geom_col(aes(x = day, y = pct)) +
+    geom_vline(xintercept = filter(first_day, 
+                                   year == the_year)$first_day,
+               color = "red", lty = 2) +
+    facet_wrap(~antenna) +
+    theme_bw() +
+    scale_x_continuous(limits = c(91,182),
+                       breaks = c(32, 60, 91, 121, 152, 
+                                  182, 213, 244, 274),
+                       labels = c("Feb", "", "Apr", "May", "Jun", 
+                                  "Jul", "Aug", "", "Oct")) +
+    theme(text = element_text(size = 15)) +
+      labs(y = "% of hours active", x = "",
+           title = "2012 & 2013")
+)
+ ggsave(here("figures", paste0("2012_2013_antenna_pct_hrs_active.png")), 
+         height = 4, width = 7, dpi = 600)
+
 ```
 
 # % hours at least 1 antenna active during peak fish time
@@ -1178,4 +1614,10 @@ sum(antenna_cover$weighted)/sum(antenna_cover$n_days)
 
 write.csv(antenna_cover,
           "output/calc_antenna_coverage.csv", row.names = F)
+
+river_flow_dates <- data.frame(year = antenna_cover$year,
+           ant_in = parse_date_time(x = antenna_cover$ant_in, orders = "j"),
+           peak_fish_start = parse_date_time(x = antenna_cover$peak_fish_start, orders = "j"),
+           peak_fish_end = parse_date_time(x = round(antenna_cover$peak_fish_end), orders = "j"))
+write.csv(river_flow_dates, "output/dates_for_river_flow_calcs.csv")
 ```
