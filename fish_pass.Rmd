@@ -301,7 +301,7 @@ tau_logit_p[c] ~ dgamma(0.001, 0.001)
 logit(mu_p[c]) <- mu_logit_p[c]
 }
 
-fallback_p ~ dunif(0,1) # dbeta(3,3)
+fallback_p ~ dunif(0,1) # 
 for(i in 1:length(fallback_detect)){
 fallback_detect[i] ~ dbern(fallback_p)
 }
@@ -352,15 +352,16 @@ logit(mu_p2) <- mu_logit_p2
 ```
 # Run passage model
 ```{r}
-# add in 2018 reach & passage info (temporarily doing it this way to avoid messing up previous code)
-fish_jags_data_16yr <- fish_jags_data
-fish_jags_data_16yr$nfishyears <- 16
-fish_jags_data_16yr$z <- c(fish_jags_data$z, 0)
-fish_jags_data_16yr$N <- c(fish_jags_data$N, 0)
-fish_jags_data_16yr$c <- c(fish_jags_data$c, 1)
+# add in 2018 (shad) and 2020-2021 (shad & herring) zero reach & passage info 
+    # (temporarily doing it this way to avoid messing up previous code)
+fish_jags_data_20yr <- fish_jags_data
+fish_jags_data_20yr$nfishyears <- 20
+fish_jags_data_20yr$z <- c(fish_jags_data$z, 0, 0, 0, 0, 0)
+fish_jags_data_20yr$N <- c(fish_jags_data$N, 0, 0, 0, 0, 0)
+fish_jags_data_20yr$c <- c(fish_jags_data$c, 1, 1, 1, 2, 2)
 
 fish_mod_new <- jagsUI::jags(
-  data = fish_jags_data_16yr,
+  data = fish_jags_data_20yr, # run with fish_jags_data_20yr to get estimates for run size
   model.file = "scripts/fish_mod_logit.txt",
   n.iter = 1000000,
   n.burnin = 500000,
@@ -380,11 +381,12 @@ fish_mod_new <- jagsUI::jags(
     list(
       lp = c(rnorm(7, 0, 0.1),
              rnorm(8, -10, 0.1),
-             rnorm(1, 0, 0.1))
+             rnorm(3, 0, 0.1),
+             rnorm(2, -10, 0.1))
     )
 )
 fish_mod_new
-# saveRDS(fish_mod_new, "other/output/fish_jags_mod_02202024b_logit_all_converged_16yr.rds")
+# saveRDS(fish_mod_new, "other/output/fish_jags_mod_02202024d_logit_all_converged_20yr.rds")
 ```
 # Run "reached" and "passed given reached" models 
 fraction of fish that reached ladder, and that passed given that they reached it (shad only)
@@ -427,180 +429,13 @@ fish_mod_reach <- jagsUI::jags(
 fish_mod_reach
 # saveRDS(fish_mod_reach, "other/output/fish_jags_mod_reach_022024_logit_all_converged_16yr.rds")
 ```
-# Create Figure 4 - Plot model output - logit (2-panel version)
-```{r}
-# new version with 1 herring passed
-fish_mod <- readRDS(here(
-  "other",
-  "output",
-  "fish_jags_mod_060122a_logit_all_converged.rds"
-))
-
-# dev.new()
-# plot(fish_mod)
-
-# for 2018 shad n annotation
-shad_n <-
-  data.frame(
-    i = 16,
-    theta_mean = NA,
-    theta_q2.5 = NA,
-    theta_q97.5 = NA,
-    theta_q10 = NA,
-    theta_q90 = NA,
-    year = 2018,
-    species = "American Shad",
-    trials.x = 0,
-    successes = 0,
-    prop = NA,
-    x = 1.05,
-    n_label = "0"
-  )
-
-# fix herring name in "raw_sum"
-raw_sum2 <- raw_sum %>%
-  mutate(species = case_when(species == "Herring spp." ~ "River Herring",
-                             TRUE ~ species))
-
-# make vector of fallback draws
-fallback_vector <- tidybayes::gather_draws(fish_mod, fallback_p_cor)$.value
-
-thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
-  mutate(theta.cor = .value/fallback_vector) %>%
-  group_by(i) %>%
-  summarise(
-    theta_mean = mean(.value),
-    theta_q2.5 = quantile(.value, .025),
-    theta_q97.5 = quantile(.value, .975),
-    theta_q10 = quantile(.value, .1),
-    theta_q90 = quantile(.value, .9),
-    theta.cor_mean = mean(theta.cor),
-    theta.cor_q2.5 = quantile(theta.cor, .025),
-    theta.cor_q97.5 = quantile(theta.cor, .975),
-    theta.cor_q10 = quantile(theta.cor, .1),
-    theta.cor_q90 = quantile(theta.cor, .9)
-  ) %>%
-  mutate(year = c(2012:2017, 2019, 2012:2019),
-         species = c(rep("American Shad", 7), rep("River Herring", 8))) %>%
-  left_join(raw_sum2) %>%
-  mutate(x = c(rep(1.05, 7), rep(.09, 8)),
-         n_label = paste0(c(rep("", 6),"n = ",
-                            rep("", 7),"n = "), trials.x)) %>%
-  bind_rows(shad_n)
-
-omegas <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
-  group_by(i) %>%
-  summarise(
-    omega_mean = mean(.value),
-    omega_q2.5 = quantile(.value, .025),
-    omega_q97.5 = quantile(.value, .975),
-    omega_q10 = quantile(.value, .1),
-    omega_q90 = quantile(.value, .9)
-  ) %>%
-  mutate(species = c("American Shad", "River Herring"))
-
-# for shad 2018 point
-shad_2018 <- omegas %>%
-  filter(species == "American Shad") %>%
-  mutate(year = 2018)
-
-# for corrected herring values
-herring.cor <- thetas %>%
-  filter(species == "River Herring")
-
-thetas %>%
-  mutate(yearmid = year,
-         year = case_when(species == "River Herring" ~ year-0.15,
-                          TRUE ~ year)) %>%
-  ggplot() +
-  geom_vline(
-    data = omegas,
-    aes(xintercept = omega_mean),
-    size = 0.5,
-    color = "red"
-  ) +
-  geom_vline(
-    data = omegas,
-    aes(xintercept = omega_q2.5),
-    size = 0.5,
-    color = "red",
-    lty = 2
-  ) +
-  geom_vline(
-    data = omegas,
-    aes(xintercept = omega_q97.5),
-    size = 0.5,
-    color = "red",
-    lty = 2
-  ) +
-  geom_errorbar(aes(xmin = theta_q2.5,
-                    xmax = theta_q97.5,
-                    y = year), width = 0) +
-  geom_errorbar(aes(xmin = theta_q10,
-                    xmax = theta_q90,
-                    y = year),
-                size = 1,
-                width = 0) +
-  geom_errorbar(aes(xmin = omega_q2.5,
-                    xmax = omega_q97.5,
-                    y = year), width = 0,
-                data = shad_2018) +
-  geom_errorbar(aes(xmin = omega_q10,
-                    xmax = omega_q90,
-                    y = year),
-                size = 1,
-                width = 0,
-                data = shad_2018) +
-  # add CI bars for the corrected passage rate
-  geom_errorbar(aes(xmin = theta.cor_q2.5,
-                    xmax = theta.cor_q97.5,
-                    y = year+0.25), width = 0,
-                data = herring.cor, color = "darkgray") +
-  geom_errorbar(aes(xmin = theta.cor_q10,
-                    xmax = theta.cor_q90,
-                    y = year+0.25),
-                size = 1,
-                width = 0,
-                data = herring.cor, color = "darkgray") +
-  geom_point(aes(x = theta_mean,
-                 y = year), size = 4) +
-  geom_point(aes(y = year, x = omega_mean),
-             size = 4, data = shad_2018) +
-  geom_point(aes(y = year+0.25, x = theta.cor_mean),
-             size = 4, data = herring.uncor, color = "darkgray") +
-  facet_wrap( ~ species, scales = "free") +
-  # scale_x_continuous(#limits = c(0, 1.1),
-  #                    breaks = seq(0, 1, 0.2)) +
-  scale_y_continuous(breaks = 2012:2019,
-                     limits = c(2011.75, 2019.25)) +
-  theme_bw() +
-  theme(text = element_text(size = 14)) +
-  labs(y = "", x = "Passage rate") +
-  geom_point(aes(x = prop, y = yearmid),
-             shape = "x",
-             color = "red",
-             size = 4) +
-  geom_text(aes(x = x, y = yearmid, 
-                label = n_label),
-            nudge_x = .02,
-            color = "darkgray",
-            hjust = 1)
-
-# ggsave(
-#   "other/figures/Figure4_20240219d.png",
-#   width = 7,
-#   heigh = 5,
-#   dpi = 600
-# )
-# fig previously named: jags_nofishhypers_logit_allconverged_run060122a.png
-```
 # Create Figure 4 - Plot model output - logit (3-panel version)
 ```{r}
-# new version with 1 herring passed
+# load model results
 fish_mod <- readRDS(here(
   "other",
   "output",
-  "fish_jags_mod_02202024b_logit_all_converged_16yr.rds"
+  "fish_jags_mod_02202024d_logit_all_converged_20yr.rds"
 ))
 
 # dev.new()
@@ -619,6 +454,7 @@ raw_sum2 <- raw_sum %>%
 fallback_vector <- tidybayes::gather_draws(fish_mod, fallback_p_cor)$.value
 
 thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
+  filter(i %in% 1:16) %>%
   mutate(theta.cor = .value/fallback_vector) %>%
   group_by(i) %>%
   summarise(
@@ -691,9 +527,6 @@ omegas3 <- omegas %>%
   bind_rows(herring.omega.cor)
 
 thetas3 %>%
-  # mutate(yearmid = year,
-  #        year = case_when(species == "River Herring" ~ year-0.15,
-  #                         TRUE ~ year)) %>%
   ggplot() +
   geom_vline(
     data = omegas3,
@@ -725,9 +558,7 @@ thetas3 %>%
                 width = 0) +
   geom_point(aes(x = theta_mean,
                  y = year), size = 4) +
-  facet_wrap( ~ species, scales = "free") +
-  # scale_x_continuous(#limits = c(0, 1.1),
-  #                    breaks = seq(0, 1, 0.2)) +
+  facet_wrap( ~ species, scales = "free_x") +
   scale_y_continuous(breaks = 2012:2019,
                      limits = c(2011.75, 2019.25)) +
   theme_bw() +
@@ -744,19 +575,18 @@ thetas3 %>%
             hjust = 1)
 
 ggsave(
-  "other/figures/Figure4_20240220b.png",
+  "other/figures/Figure4_20240220f.png",
   width = 10.5,
   heigh = 5,
   dpi = 600
 )
-# fig previously named: jags_nofishhypers_logit_allconverged_run060122a.png
 ```
 # Create Figure 5 - Run size based on video time series & passage rates
 ```{r}
 # Match up year time series with 
 fish_mod <- readRDS(here("other",
                          "output",
-                     "fish_jags_mod_060122a_logit_all_converged.rds"
+                     "fish_jags_mod_02202024d_logit_all_converged_20yr.rds"
                          ))
 
 fallback_vector <- tidybayes::gather_draws(fish_mod, fallback_p_cor)$.value
@@ -766,13 +596,15 @@ iter <- 7500
 
 # collect all theta posterior draws and add fish/year info
 theta_draws <- tidybayes::gather_draws(fish_mod, p[i]) %>%
-  left_join(data.frame(i = 1:15, 
-                       year = c(2012:2017,2019,2012:2019)),
+  left_join(data.frame(i = 1:20, 
+                       year = c(2012:2017,2019,2012:2019, 2018, 2020:2021, 2020:2021)),
             by = "i") %>%
   ungroup() %>%
   mutate(species = c(rep("American Shad", 7*iter), 
-                     rep("River Herring", 8*iter)),
-         fallback = rep(fallback_vector, 15),
+                     rep("River Herring", 8*iter),
+                     rep("American Shad", 3*iter),
+                     rep("River Herring", 2*iter)),
+         fallback = rep(fallback_vector, 20),
          pass_cor = case_when(species == "American Shad" ~
                                 .value,
                               species == "River Herring" ~
@@ -783,58 +615,7 @@ boxplot(theta_draws$pass_cor~theta_draws$i)
 boxplot(theta_draws$pass_cor2~theta_draws$i)
 boxplot(theta_draws$.value~theta_draws$i)
 
-# collect omega (fish average) passage rate draws & add fish/year
-# (just 2020 2021, & early years with no passage info)
-# (also 2018 missing for Shad)
-omega_draws_temp <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
-  filter(i == 1)
-
-omega_draws_temp_shad <- mutate(omega_draws_temp, 
-                      year = shad_hist$year[1]) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[2])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[3])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[4])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[5])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[6])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[7])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[8])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[9])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
-  bind_rows(mutate(omega_draws_temp, year = 2018)) %>%
-  bind_rows(mutate(omega_draws_temp, year = 2020)) %>%
-  bind_rows(mutate(omega_draws_temp, year = 2021)) %>%
-  mutate(species = "American Shad",
-         fallback = rep(fallback_vector, 13),
-         pass_cor = .value,
-         pass_cor2 = .value/.47)
-
-omega_draws_temp <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
-  filter(i == 2)
-
-omega_draws_temp_herring <- mutate(omega_draws_temp, 
-                      year = shad_hist$year[1]) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[2])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[3])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[4])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[5])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[6])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[7])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[8])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[9])) %>%
-  bind_rows(mutate(omega_draws_temp, year = shad_hist$year[10])) %>%
-  bind_rows(mutate(omega_draws_temp, year = 2020)) %>%
-  bind_rows(mutate(omega_draws_temp, year = 2021)) %>%
-  mutate(species = "River Herring",
-         fallback = rep(fallback_vector, 12),
-         pass_cor = .value/fallback,
-         pass_cor2 = .value/.47)
-
-omega_draws <- omega_draws_temp_shad %>%
-  bind_rows(omega_draws_temp_herring)
-
-rm(omega_draws_temp, 
-   omega_draws_temp_shad, 
-   omega_draws_temp_herring)
+omega_draws <- tidybayes::gather_draws(fish_mod, mu_p[i])
 
 # fix name of River Herring for plotting
 v_River_Herring <- v %>%
@@ -844,8 +625,8 @@ v_River_Herring <- v %>%
 # join posterior draws to fish counts
 fish_n_draws <- theta_draws %>%
   # add in global average (omega) passage draws for shad
-  # in 2018 with no passage data  
-  bind_rows(omega_draws) %>%
+  # # in 2018 with no passage data  
+  # bind_rows(omega_draws) %>%
   # join with video count data
   left_join(v_River_Herring) %>%
   filter(is.na(n) != TRUE) %>% # remove years with no counts
@@ -919,18 +700,20 @@ fish_n %>%
   theme(strip.background = element_rect(fill="white")) +
   labs(x = "", y = "Run size (n)")
 
-# ggsave("other/figures/Figure5.png",
-#        height = 4, width = 7,
-#        dpi = 600)
+ggsave("other/figures/Figure5_20240220b.png",
+       height = 4, width = 7,
+       dpi = 600)
 
 # figure previously named: run_size_passage_cor_uncertainfallback_run060122a_logit_20220601_newdata.png
 
-# get corrected passage rate
+# get corrected passage rate for herring
 omega_draws %>% 
-  filter(species == "River Herring",
-  year == 2021) %>%
-  group_by(species, year) %>% 
-  summarize(meanpass = mean(.value), 
+  mutate(pass_cor = .value/fallback_vector) %>%
+  filter(i == 2) %>%
+  group_by(i) %>% 
+  summarize(meanpass = mean(.value),
+            meanpass_l = quantile(.value, 0.025),
+            meanpass_u = quantile(.value, 0.975),
             cor = mean(pass_cor),
             cor_l = quantile(pass_cor, 0.025),
             cor_u = quantile(pass_cor, 0.975))
@@ -1186,9 +969,13 @@ stairs %>%
   ggplot() +
   geom_col(aes(x = stage2, y = n),
            position = position_dodge(width = 1)) +
-  geom_col(aes(x = stage2, y = n),
+  geom_col(aes(x = stage2, y = 164),
            position = position_dodge(width = 1),
            fill = "darkgray",
+           data = fallback_df) +
+  geom_col(aes(x = stage2, y = n),
+           position = position_dodge(width = 1),
+           fill = "gray30",
            data = fallback_df) +
   facet_wrap(~ sp, scales = "free") +
   theme_bw() +
@@ -1196,7 +983,7 @@ stairs %>%
         strip.background = element_rect(fill = "white")) +
   labs(x = "", y = "Number of individuals")
 
-# ggsave("other/figures/Figure3.png", width = 7, height = 5, dpi = 600)
+# ggsave("other/figures/Figure3_20240220.png", width = 7, height = 5, dpi = 600)
 
 # figure previously named: stairstep_20220601.png
 ```
