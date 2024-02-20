@@ -295,7 +295,8 @@ for(s in 1:nfishyears){
 }  
 
 for( c in 1:nfish){
-mu_logit_p[c] ~ dnorm(0, 0.001)
+mu_logit_p[c] ~ dnorm(0, 0.001) 
+# note: dunif(-6.9, 10) and dnorm(0,0.111) = similar results, but herring lowerbound = 0.001
 tau_logit_p[c] ~ dgamma(0.001, 0.001)
 logit(mu_p[c]) <- mu_logit_p[c]
 }
@@ -312,8 +313,9 @@ fallback_p_cor <- fallback_p / 0.5
 }
 "
 )
+
 ```
-# JAGS model for fish "attraction" proportion (p that reach the ladder)
+# JAGS model for fish "reached" and "passed given reached" proportion (p that reach the ladder)
 logit-normal with hyperparameter for each fish
 ```{r}
 
@@ -333,7 +335,7 @@ logit(mu_p[c]) <- mu_logit_p[c]
 }
 
 # passage given reached (shad only)
-for(s in 1:7){
+for(s in c(1:7,16)){
   z[s] ~ dbin(ilogit(lp2[s]), z.reach[s])
   lp2[s] ~ dnorm(mu_logit_p2, tau_logit_p2)
   logit(p2[s]) <- lp2[s]
@@ -350,8 +352,15 @@ logit(mu_p2) <- mu_logit_p2
 ```
 # Run passage model
 ```{r}
+# add in 2018 reach & passage info (temporarily doing it this way to avoid messing up previous code)
+fish_jags_data_16yr <- fish_jags_data
+fish_jags_data_16yr$nfishyears <- 16
+fish_jags_data_16yr$z <- c(fish_jags_data$z, 0)
+fish_jags_data_16yr$N <- c(fish_jags_data$N, 0)
+fish_jags_data_16yr$c <- c(fish_jags_data$c, 1)
+
 fish_mod_new <- jagsUI::jags(
-  data = fish_jags_data,
+  data = fish_jags_data_16yr,
   model.file = "scripts/fish_mod_logit.txt",
   n.iter = 1000000,
   n.burnin = 500000,
@@ -370,23 +379,27 @@ fish_mod_new <- jagsUI::jags(
   inits = function()
     list(
       lp = c(rnorm(7, 0, 0.1),
-             rnorm(8, -10, 0.1)),
-      omega =
-        c(rnorm(1, .47, .01),
-          rnorm(1, .01, .01)),
-      kappaMinusTwo = c(rnorm(1, 400, 2),                                                      rnorm(1, 1000, 2)),
-      S0 = rnorm(1, 25, 1),
-      R0 = rnorm(1, .1, 0.01)
+             rnorm(8, -10, 0.1),
+             rnorm(1, 0, 0.1))
     )
 )
 fish_mod_new
-# saveRDS(fish_mod_new, "other/output/fish_jags_mod_060122a_logit_all_converged.rds")
+# saveRDS(fish_mod_new, "other/output/fish_jags_mod_02202024_logit_all_converged_16yr.rds")
 ```
 # Run "reached" and "passed given reached" models 
 fraction of fish that reached ladder, and that passed given that they reached it (shad only)
 ```{r}
+# add in 2018 reach & passage info
+fish_jags_data2 <- fish_jags_data
+fish_jags_data2$nfishyears <- 16
+fish_jags_data2$z <- c(fish_jags_data$z, 0)
+fish_jags_data2$z.reach <- c(fish_jags_data$z.reach, 0)
+fish_jags_data2$N <- c(fish_jags_data$N, 0)
+fish_jags_data2$c <- c(fish_jags_data$c, 1)
+
+# model of proportion reaching ladder ("attraction")
 fish_mod_reach <- jagsUI::jags(
-  data = fish_jags_data,
+  data = fish_jags_data2,
   model.file = "scripts/fish_mod_logit_reach.txt",
   n.iter = 1000000,
   n.burnin = 500000,
@@ -407,14 +420,14 @@ fish_mod_reach <- jagsUI::jags(
   n.thin = 200,
   inits = function()
     list(
-      lp = c(rnorm(7, 0, 0.1),
+      lp = c(rnorm(8, 0, 0.1),
              rnorm(8, -10, 0.1))
     )
 )
 fish_mod_reach
-# saveRDS(fish_mod_reach, "other/output/fish_jags_mod_reach_021924_logit_all_converged.rds")
+# saveRDS(fish_mod_reach, "other/output/fish_jags_mod_reach_022024_logit_all_converged_16yr.rds")
 ```
-# Create Figure 4 - Plot model output - logit
+# Create Figure 4 - Plot model output - logit (2-panel version)
 ```{r}
 # new version with 1 herring passed
 fish_mod <- readRDS(here(
@@ -471,8 +484,8 @@ thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
          species = c(rep("American Shad", 7), rep("River Herring", 8))) %>%
   left_join(raw_sum2) %>%
   mutate(x = c(rep(1.05, 7), rep(.09, 8)),
-         n_label = paste0(c(rep("", 6),"n =",
-                            rep("", 7),"n ="), trials.x)) %>%
+         n_label = paste0(c(rep("", 6),"n = ",
+                            rep("", 7),"n = "), trials.x)) %>%
   bind_rows(shad_n)
 
 omegas <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
@@ -1620,4 +1633,229 @@ river_flow_dates <- data.frame(year = antenna_cover$year,
            peak_fish_start = parse_date_time(x = antenna_cover$peak_fish_start, orders = "j"),
            peak_fish_end = parse_date_time(x = round(antenna_cover$peak_fish_end), orders = "j"))
 write.csv(river_flow_dates, "output/dates_for_river_flow_calcs.csv")
+```
+# Create Figure SX - Plot "attraction" model output - logit (2-panel version)
+```{r}
+# new version with 1 herring passed
+fish_mod_reach <- readRDS(here(
+  "other",
+  "output",
+  "fish_jags_mod_reach_022024_logit_all_converged_16yr.rds"
+))
+
+# dev.new()
+# plot(fish_mod)
+
+# fix herring name in "raw_sum"
+raw_sum2 <- raw_sum %>%
+  mutate(species = case_when(species == "Herring spp." ~ "River Herring",
+                             TRUE ~ species)) %>%
+  # add in missing passage info from 2018
+  bind_rows(data.frame(trials.x = 0, successes = 0, prop = NA, 
+                       successes.reach = 0, prop.reach = NA,
+                       year = 2018, species = "American Shad"))
+
+# create data frame of thetas (annual probability of reaching weir given tagged)
+
+thetas <- tidybayes::gather_draws(fish_mod_reach, p[i]) %>%
+  group_by(i) %>%
+  summarise(
+    theta_mean = mean(.value),
+    theta_q2.5 = quantile(.value, .025),
+    theta_q97.5 = quantile(.value, .975),
+    theta_q10 = quantile(.value, .1),
+    theta_q90 = quantile(.value, .9)
+  ) %>%
+  mutate(year = c(2012:2017, 2019, 2012:2019, 2018),
+         species = c(rep("American Shad", 7), rep("River Herring", 8), "American Shad")) %>%
+  left_join(raw_sum2) %>%
+  mutate(x = c(rep(1.05, 7), rep(.09, 8), 1.05),
+         n_label = paste0(c(rep("", 6),"n = ",
+                            rep("", 7),"n = ", ""), trials.x))
+
+omegas <- tidybayes::gather_draws(fish_mod_reach, mu_p[i]) %>%
+  group_by(i) %>%
+  summarise(
+    omega_mean = mean(.value),
+    omega_q2.5 = quantile(.value, .025),
+    omega_q97.5 = quantile(.value, .975),
+    omega_q10 = quantile(.value, .1),
+    omega_q90 = quantile(.value, .9)
+  ) %>%
+  mutate(species = c("American Shad", "River Herring"))
+
+thetas %>%
+  ggplot() +
+  geom_vline(
+    data = omegas,
+    aes(xintercept = omega_mean),
+    size = 0.5,
+    color = "red"
+  ) +
+  geom_vline(
+    data = omegas,
+    aes(xintercept = omega_q2.5),
+    size = 0.5,
+    color = "red",
+    lty = 2
+  ) +
+  geom_vline(
+    data = omegas,
+    aes(xintercept = omega_q97.5),
+    size = 0.5,
+    color = "red",
+    lty = 2
+  ) +
+  geom_errorbar(aes(xmin = theta_q2.5,
+                    xmax = theta_q97.5,
+                    y = year), width = 0) +
+  geom_errorbar(aes(xmin = theta_q10,
+                    xmax = theta_q90,
+                    y = year),
+                size = 1,
+                width = 0) +
+  # geom_errorbar(aes(xmin = omega_q2.5,
+  #                   xmax = omega_q97.5,
+  #                   y = year), width = 0,
+  #               data = shad_2018) +
+  # geom_errorbar(aes(xmin = omega_q10,
+  #                   xmax = omega_q90,
+  #                   y = year),
+  #               size = 1,
+  #               width = 0,
+  #               data = shad_2018) +
+  geom_point(aes(x = theta_mean,
+                 y = year), size = 4) +
+  # geom_point(aes(y = year, x = omega_mean),
+  #            size = 4, data = shad_2018) +
+  facet_wrap( ~ species, scales = "free_x") +
+  # scale_x_continuous(#limits = c(0, 1.1),
+  #                    breaks = seq(0, 1, 0.2)) +
+  scale_y_continuous(breaks = 2012:2019,
+                     limits = c(2011.75, 2019.25)) +
+  theme_bw() +
+  theme(text = element_text(size = 14)) +
+  labs(y = "", x = "Attraction rate") +
+  geom_point(aes(x = prop.reach, y = year),
+             shape = "x",
+             color = "red",
+             size = 4) +
+  geom_text(aes(x = x, y = year, 
+                label = n_label),
+            nudge_x = .02,
+            color = "darkgray",
+            hjust = 1)
+
+ggsave(
+  "other/figures/FigureSx_attraction_rate_model_20240220d.png",
+  width = 7,
+  heigh = 5,
+  dpi = 600
+)
+```
+# Create Figure SX - Plot "passage given attraction" model output - logit (just shad)
+```{r}
+# new version with 1 herring passed
+fish_mod_reach <- readRDS(here(
+  "other",
+  "output",
+  "fish_jags_mod_reach_022024_logit_all_converged_16yr.rds"
+))
+
+# dev.new()
+# plot(fish_mod)
+
+# subset just shad in "raw_sum"
+raw_sum2 <- raw_sum %>%
+  filter(species == "American Shad") %>%
+  mutate(prop.passreach = successes/successes.reach) %>%
+  # add in missing passage info from 2018
+  bind_rows(data.frame(trials.x = 0, successes = 0, prop = NA, 
+                       successes.reach = 0, prop.reach = NA,
+                       year = 2018, species = "American Shad"))
+
+# create data frame of thetas (annual probability of reaching weir given tagged)
+
+thetas <- tidybayes::gather_draws(fish_mod_reach, p2[i]) %>%
+  group_by(i) %>%
+  summarise(
+    theta_mean = mean(.value),
+    theta_q2.5 = quantile(.value, .025),
+    theta_q97.5 = quantile(.value, .975),
+    theta_q10 = quantile(.value, .1),
+    theta_q90 = quantile(.value, .9)
+  ) %>%
+  mutate(year = c(2012:2017, 2019, 2018),
+         species = "American Shad") %>%
+  left_join(raw_sum2) %>%
+  mutate(x = c(rep(1.05, 8)),
+         n_label = paste0(c(rep("", 6),"n = ", ""), successes.reach))
+
+omegas <- tidybayes::gather_draws(fish_mod_reach, mu_p2) %>%
+  group_by(.variable) %>%
+  summarise(
+    omega_mean = mean(.value),
+    omega_q2.5 = quantile(.value, .025),
+    omega_q97.5 = quantile(.value, .975),
+    omega_q10 = quantile(.value, .1),
+    omega_q90 = quantile(.value, .9)
+  ) %>%
+  mutate(species = "American Shad")
+
+thetas %>%
+  ggplot() +
+  geom_vline(
+    data = omegas,
+    aes(xintercept = omega_mean),
+    size = 0.5,
+    color = "red"
+  ) +
+  geom_vline(
+    data = omegas,
+    aes(xintercept = omega_q2.5),
+    size = 0.5,
+    color = "red",
+    lty = 2
+  ) +
+  geom_vline(
+    data = omegas,
+    aes(xintercept = omega_q97.5),
+    size = 0.5,
+    color = "red",
+    lty = 2
+  ) +
+  geom_errorbar(aes(xmin = theta_q2.5,
+                    xmax = theta_q97.5,
+                    y = year), width = 0) +
+  geom_errorbar(aes(xmin = theta_q10,
+                    xmax = theta_q90,
+                    y = year),
+                size = 1,
+                width = 0) +
+  geom_point(aes(x = theta_mean,
+                 y = year), size = 4) +
+  facet_wrap( ~ species, scales = "free") +
+  scale_x_continuous(limits = c(0.4, 1.09),
+                     breaks = seq(0, 1, 0.1)) +
+  scale_y_continuous(breaks = 2012:2019,
+                     limits = c(2011.75, 2019.25)) +
+  theme_bw() +
+  theme(text = element_text(size = 14)) +
+  labs(y = "", x = "Passage rate (given attraction)") +
+  geom_point(aes(x = prop.passreach, y = year),
+             shape = "x",
+             color = "red",
+             size = 4) +
+  geom_text(aes(x = x, y = year, 
+                label = n_label),
+            nudge_x = .04,
+            color = "darkgray",
+            hjust = 1)
+
+ggsave(
+  "other/figures/FigureSx_passage_given_attraction_rate_model_20240220e.png",
+  width = 4,
+  heigh = 5,
+  dpi = 600
+)
 ```

@@ -13,7 +13,7 @@ logit(mu_p[c]) <- mu_logit_p[c]
 }
 
 # passage given reached (shad only)
-for(s in 1:7){
+for(s in c(1:7,16)){
   z[s] ~ dbin(ilogit(lp2[s]), z.reach[s])
   lp2[s] ~ dnorm(mu_logit_p2, tau_logit_p2)
   logit(p2[s]) <- lp2[s]

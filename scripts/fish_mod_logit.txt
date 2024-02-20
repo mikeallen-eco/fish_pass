@@ -7,7 +7,8 @@ for(s in 1:nfishyears){
 }  
 
 for( c in 1:nfish){
-mu_logit_p[c] ~ dnorm(0, 0.001)
+mu_logit_p[c] ~ dnorm(0, 0.001) 
+# note: dunif(-6.9, 10) and dnorm(0,0.111) = similar results, but herring lowerbound = 0.001
 tau_logit_p[c] ~ dgamma(0.001, 0.001)
 logit(mu_p[c]) <- mu_logit_p[c]
 }
