@@ -384,7 +384,7 @@ fish_mod_new <- jagsUI::jags(
     )
 )
 fish_mod_new
-# saveRDS(fish_mod_new, "other/output/fish_jags_mod_02202024_logit_all_converged_16yr.rds")
+# saveRDS(fish_mod_new, "other/output/fish_jags_mod_02202024b_logit_all_converged_16yr.rds")
 ```
 # Run "reached" and "passed given reached" models 
 fraction of fish that reached ladder, and that passed given that they reached it (shad only)
@@ -600,34 +600,20 @@ thetas %>%
 fish_mod <- readRDS(here(
   "other",
   "output",
-  "fish_jags_mod_060122a_logit_all_converged.rds"
+  "fish_jags_mod_02202024b_logit_all_converged_16yr.rds"
 ))
 
 # dev.new()
 # plot(fish_mod)
 
-# for 2018 shad n annotation
-shad_n <-
-  data.frame(
-    i = 16,
-    theta_mean = NA,
-    theta_q2.5 = NA,
-    theta_q97.5 = NA,
-    theta_q10 = NA,
-    theta_q90 = NA,
-    year = 2018,
-    species = "American Shad",
-    trials.x = 0,
-    successes = 0,
-    prop = NA,
-    x = 1.05,
-    n_label = "0"
-  )
-
 # fix herring name in "raw_sum"
 raw_sum2 <- raw_sum %>%
   mutate(species = case_when(species == "Herring spp." ~ "River Herring",
-                             TRUE ~ species))
+                             TRUE ~ species)) %>%
+  # add in missing passage info from 2018
+  bind_rows(data.frame(trials.x = 0, successes = 0, prop = NA, 
+                       successes.reach = 0, prop.reach = NA,
+                       year = 2018, species = "American Shad"))
 
 # make vector of fallback draws
 fallback_vector <- tidybayes::gather_draws(fish_mod, fallback_p_cor)$.value
@@ -647,13 +633,12 @@ thetas <- tidybayes::gather_draws(fish_mod, p[i]) %>%
     theta.cor_q10 = quantile(theta.cor, .1),
     theta.cor_q90 = quantile(theta.cor, .9)
   ) %>%
-  mutate(year = c(2012:2017, 2019, 2012:2019),
-         species = c(rep("American Shad", 7), rep("River Herring", 8))) %>%
+  mutate(year = c(2012:2017, 2019, 2012:2019, 2018),
+         species = c(rep("American Shad", 7), rep("River Herring", 8), "American Shad")) %>%
   left_join(raw_sum2) %>%
-  mutate(x = c(rep(1.05, 7), rep(.09, 8)),
-         n_label = paste0(c(rep("", 6),"n =",
-                            rep("", 7),"n ="), trials.x)) %>%
-  bind_rows(shad_n)
+  mutate(x = c(rep(1.05, 7), rep(.09, 8), 1.05),
+         n_label = paste0(c(rep("", 6),"n = ",
+                            rep("", 7),"n = ", ""), trials.x))
 
 omegas <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
   mutate(omega.cor = .value/fallback_vector) %>%
@@ -671,11 +656,6 @@ omegas <- tidybayes::gather_draws(fish_mod, mu_p[i]) %>%
     omega.cor_q90 = quantile(omega.cor, .9)
   ) %>%
   mutate(species = c("American Shad", "River Herring"))
-
-# for shad 2018 point
-shad_2018 <- omegas %>%
-  filter(species == "American Shad") %>%
-  mutate(year = 2018)
 
 # for corrected herring values
 herring.theta.cor <- thetas %>%
@@ -702,12 +682,8 @@ herring.omega.cor <- omegas %>%
 thetas3 <- thetas %>%
   select(theta_mean:theta_q90, year:n_label) %>%
   bind_rows(herring.theta.cor)
-# replace NA 2018 values for American Shad with overall mean (omega) values
-thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_mean <- shad_2018$omega_mean
-thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_q2.5 <- shad_2018$omega_q2.5
-thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_q97.5 <- shad_2018$omega_q97.5
-thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_q10 <- shad_2018$omega_q10
-thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$theta_q90 <- shad_2018$omega_q90
+# replace NA trial values for 2018 for American Shad with 0
+thetas3[thetas3$year==2018 & thetas3$species=="American Shad",]$trials.x <- 0
 
 # bind together shad, herring, and herring (corrected) overall mean (omega) data for plotting all together
 omegas3 <- omegas %>%
@@ -747,33 +723,8 @@ thetas3 %>%
                     y = year),
                 size = 1,
                 width = 0) +
-  # geom_errorbar(aes(xmin = omega_q2.5,
-  #                   xmax = omega_q97.5,
-  #                   y = year), width = 0,
-  #               data = shad_2018) +
-  # geom_errorbar(aes(xmin = omega_q10,
-  #                   xmax = omega_q90,
-  #                   y = year),
-  #               size = 1,
-  #               width = 0,
-  #               data = shad_2018) +
-  # add CI bars for the corrected passage rate
-  # geom_errorbar(aes(xmin = theta.cor_q2.5,
-  #                   xmax = theta.cor_q97.5,
-  #                   y = year+0.25), width = 0,
-  #               data = herring.cor, color = "darkgray") +
-  # geom_errorbar(aes(xmin = theta.cor_q10,
-  #                   xmax = theta.cor_q90,
-  #                   y = year+0.25),
-  #               size = 1,
-  #               width = 0,
-  #               data = herring.cor, color = "darkgray") +
   geom_point(aes(x = theta_mean,
                  y = year), size = 4) +
-  # geom_point(aes(y = year, x = omega_mean),
-  #            size = 4, data = shad_2018) +
-  # geom_point(aes(y = year+0.25, x = theta.cor_mean),
-  #            size = 4, data = herring.uncor, color = "darkgray") +
   facet_wrap( ~ species, scales = "free") +
   # scale_x_continuous(#limits = c(0, 1.1),
   #                    breaks = seq(0, 1, 0.2)) +
@@ -793,7 +744,7 @@ thetas3 %>%
             hjust = 1)
 
 ggsave(
-  "other/figures/Figure4_20240219e.png",
+  "other/figures/Figure4_20240220b.png",
   width = 10.5,
   heigh = 5,
   dpi = 600
