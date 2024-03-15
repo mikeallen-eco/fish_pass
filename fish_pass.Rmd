@@ -277,7 +277,6 @@ rm(sr2012, sr2013, sr2014, sr2015,
                   sr2020, sr2021)
 ```
 # Save data and diagnostic plot files for inspection
-Need to be checked by Anthony.
 ```{r}
 # source("scripts/save_diagnostics.R")
 ```
@@ -664,6 +663,9 @@ fish_n <- fish_n_draws %>%
                                 nhat_med,
                               TRUE ~ nhat_q97.5))
 
+# save run size estimates for sharing
+# write.csv(filter(fish_n, year >= 2013), "data/run_size_estimates.csv", row.names = F)
+
 # plot nhat by species and year with credible intervals
 fish_n %>%
   filter(year >= 2013) %>%
@@ -786,7 +788,6 @@ ggsave("other/figures/Figure2.png",
        height = 4, width = 7,
        dpi = 600)
 
-# figure previously named: passage_time_boxplot4.png
 ```
 # Summarizing passage metrics
 ```{r}
