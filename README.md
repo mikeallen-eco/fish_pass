@@ -28,3 +28,8 @@ All figures in the manuscript created using the code in this repository.
 /output
 
 These .rds files store model output or data that is referenced in the fish_pass.Rmd.
+
+/scripts
+
+These .R files are functions and scripts to process data as referenced in the fish_pass.Rmd file. 
+The .txt files are the JAGS models.
