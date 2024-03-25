@@ -1,5 +1,5 @@
 # Migratory passage and run size of American shad and river herring
-The purpose of this repository is to provide code and data to reproduce the analyses, tables, and figures in the manuscript: "Migratory passage and run size of American shad and river herring in the Raritan River, New Jersey, USA" (Jensen et al., 2024). 
+This repository provides code and data to reproduce the analyses and figures in the manuscript: "Migratory passage and run size of American shad and river herring in the Raritan River, New Jersey, USA" (Jensen et al., 2024). 
 
 The published version will be:
 Jensen, O. P., Vastano, A. R., Allen, M. C., Hernandez, M. F., Lockwood, J. L., Vasslides, J., & Weldon, O. (2024). Migratory passage and run size of American shad and river herring in the Raritan River, New Jersey, USA. Transactions of the American Fisheries Society.
@@ -7,6 +7,7 @@ Jensen, O. P., Vastano, A. R., Allen, M. C., Hernandez, M. F., Lockwood, J. L., 
 # List of files
 
 /
+
 Script & project files in the main folder
 1. fish_pass.Rmd - re-create the analyses and figures in the manuscript
 2. fish_pass.Rproj - double click on this file to open the R Project in RStudio
