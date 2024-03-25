@@ -13,6 +13,7 @@ Script & project files in the main folder
 2. fish_pass.Rproj - double click on this file to open the R Project in RStudio
 
 /data
+
 Files in the data folder referenced in fish_pass.Rmd
 1. IFW Tagging Data Golden Master 2_25_22.xlsx - data on each tagged fish
 2. IFW Video Data Golden Master_4_24_22.xlsx - video fish count data
@@ -21,7 +22,9 @@ Files in the data folder referenced in fish_pass.Rmd
 5. /sun - text files containing sunrise and sunset data for Figure S1
 
 /figures
+
 All figures in the manuscript created using the code in this repository.
 
 /output
+
 These .rds files store model output or data that is referenced in the fish_pass.Rmd.
