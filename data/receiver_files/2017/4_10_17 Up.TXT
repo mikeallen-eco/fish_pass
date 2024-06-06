@@ -1,0 +1,46 @@
+
+Type 'HE' for help
+
+>ad
+                           supply                    supply     clock
+                            amps                      volts     volts
+Rx 0.22 Tx                 A3 0.89         EA 0.55   12.5 V     3.2 V   14:26:02.20
+Rx 0.21 Tx                 A3 0.90 A4 1.01 EA 0.57   12.5 V     3.2 V   14:26:02.65
+Rx 0.21 Tx                 A3 0.91 A4 1.00 EA 0.58   12.5 V     3.2 V   14:26:03.16
+Rx 0.21 Tx                 A3 0.90 A4 1.02 EA 0.58   12.5 V     3.2 V   14:26:03.67
+Rx 0.21 Tx                 A3 0.92 A4 1.02 EA 0.59   12.5 V     3.2 V   14:26:04.19
+
+>up
+Upload #3
+Reader: UPSTREAM 34  Site: AA
+--------- upload 3 start ---------
+E 2017-03-30 14:41:34.64 upload 2 complete
+E 2017-04-10 13:30:56.17 supply power ok 12.5V
+E 2017-04-10 13:30:56.17 database file opened
+E 2017-04-10 13:30:56.17 starting reader after power up
+D 2017-04-10 13:31:17.33 00:00:03.43 HA      900_226000791702 A4   18    81
+D 2017-04-10 13:31:22.37 00:00:02.03 HA      900_226000791702 A4   11     7
+D 2017-04-10 13:31:43.03 00:00:00.60 HA      900_226000791733 A3    4   209
+D 2017-04-10 13:31:45.84 00:00:03.45 HA      900_226000791733 A3   18    10
+D 2017-04-10 13:31:51.70 00:00:01.41 HA      900_226000791733 A3    8    11
+D 2017-04-10 13:31:54.33 00:00:00.81 HA      900_226000791733 A3    5     5
+D 2017-04-10 13:31:56.34 00:00:03.44 HA      900_226000791733 A3   18     5
+E 2017-04-10 14:10:13.79 supply power ok 12.5V
+E 2017-04-10 14:10:13.79 database file opened
+E 2017-04-10 14:10:13.79 starting reader after power up
+--------- upload 3 done ---------
+14 records
+
+>mux
+Type 'HE' for help
+
+>mx
+34
+>cg
+reader settings
+ CGA1  mux with 1 antenna
+ CGC50 charge period 50ms 
+ CGP50 duty cycle pause 50ms
+ CGS0  synch mode: none [0=none,1=wireless,2=wired,3=wired/wireless,4=master,5=slave]
+
+>

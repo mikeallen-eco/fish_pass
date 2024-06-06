@@ -1,0 +1,72 @@
+
+
+Oregon RFID Datalogger Version 3.99  
+Datalogger functions
+ UP upload detection records
+ UH show upload history
+ UT upload time records
+TagTracker functions
+ EX export TagTracker database
+ IM import TagTracker database
+Reader configuration
+ DT set date and time
+ FR factory reset datalogger and reader
+ ON set automatic on/off times
+ CG change reader settings
+ MX enter mux sequence
+ MV set minimum voltage before shutdown
+ DM select detection messages to display
+ CO enter comment to log file
+Performance monitor
+ SS show scans per second and pulse timings
+ AD show reader voltages, amperages
+ AV calibrate analog voltage
+ RT read board temperature
+ WR write tag id
+
+>up
+upload #28 start: 07/05/2012 11:41:32.20
+Site code: JUL
+--------- upload 28 start ---------
+07/05/2012 11:41:32.21 upload 27 complete
+07/05/2012 11:42:21.84 datalogger mode selected
+07/09/2012 11:57:39.09 supply power ok 13.5V
+07/09/2012 11:57:39.09 database file opened
+07/09/2012 11:57:39.10 starting reader after power up
+07/09/2012 11:59:10.94  00:00:00.60 A 00000 0 900 226000011039 A1    4   426
+07/09/2012 11:59:12.75  00:00:00.00 A 00000 0 900 226000011039 A1    1     5
+07/09/2012 11:59:12.56  00:00:00.00 A 00000 0 900 226000011039 A1    1     3
+07/09/2012 11:59:14.97  00:00:59.20 A 00000 0 900 226000011039 A1    2     1
+07/09/2012 11:59:14.57  00:00:00.00 A 00000 0 900 226000011039 A1    1     1
+07/09/2012 11:59:14.97  00:00:00.41 A 00000 0 900 226000011039 A1    3     1
+07/09/2012 11:59:15.78  00:00:00.20 A 00000 0 900 226000011039 A1    2     1
+07/09/2012 11:59:34.61  00:00:00.20 A 00000 0 900 226000011039 A2    2   542
+07/09/2012 11:59:35.21  00:00:00.00 A 00000 0 900 226000011039 A2    1     1
+07/09/2012 11:59:35.61  00:00:00.00 A 00000 0 900 226000011039 A2    1     1
+07/09/2012 11:59:41.46  00:00:01.01 A 00000 0 900 226000011039 A2    6    28
+07/09/2012 11:59:43.68  00:00:00.00 A 00000 0 900 226000011039 A2    1     5
+07/09/2012 11:59:45.90  00:00:00.00 A 00000 0 900 226000011039 A2    1    10
+--------- upload 28 done ---------
+
+>up26
+upload #26  start: 06/28/2012 10:02:22.96 records:      15
+Site code: JUL
+--------- upload 26 start ---------
+06/28/2012 10:02:22.96 upload 25 complete
+06/28/2012 10:04:10.59 datalogger mode selected
+06/28/2012 10:09:34.31  00:00:00.20 A 00000 0 900 226000010987 A1    2  2720
+06/28/2012 10:09:41.76  00:00:00.20 A 00000 0 900 226000010987 A1    2    35
+06/28/2012 10:09:46.39  00:00:00.00 A 00000 0 900 226000010987 A1    1    21
+06/28/2012 10:09:46.79  00:00:00.00 A 00000 0 900 226000010987 A1    1     1
+06/28/2012 10:09:49.61  00:00:00.21 A 00000 0 900 226000010987 A1    2    13
+06/28/2012 10:09:53.65  00:00:00.20 A 00000 0 900 226000010987 A1    2    18
+06/28/2012 10:10:17.09  00:00:00.81 A 00000 0 900 226000010987 A2    5  2765
+06/28/2012 10:10:21.73  00:00:00.81 A 00000 0 900 226000010987 A2    5    18
+06/28/2012 10:10:25.56  00:00:00.80 A 00000 0 900 226000010987 A2    5    14
+06/28/2012 10:10:28.19  00:00:00.60 A 00000 0 900 226000010987 A2    4     8
+07/02/2012 12:33:45.21 supply power ok 13.5V
+07/02/2012 12:33:45.21 database file opened
+07/02/2012 12:33:45.21 starting reader after power up
+--------- history upload 26 done ---------
+
+>up  

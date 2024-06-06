@@ -1,0 +1,48 @@
+
+
+Oregon RFID Datalogger Version 3.99  
+Datalogger functions
+ UP upload detection records
+ UH show upload history
+ UT upload time records
+TagTracker functions
+ EX export TagTracker database
+ IM import TagTracker database
+Reader configuration
+ DT set date and time
+ FR factory reset datalogger and reader
+ ON set automatic on/off times
+ CG change reader settings
+ MX enter mux sequence
+ MV set minimum voltage before shutdown
+ DM select detection messages to display
+ CO enter comment to log file
+Performance monitor
+ SS show scans per second and pulse timings
+ AD show reader voltages, amperages
+ AV calibrate analog voltage
+ RT read board temperature
+ WR write tag id
+
+>up
+upload #26 start: 06/28/2012 10:02:22.96
+Site code: JN
+--------- upload 26 start ---------
+06/28/2012 10:02:22.96 upload 25 complete
+06/28/2012 10:04:10.59 datalogger mode selected
+06/28/2012 10:09:34.31  00:00:00.20 A 00000 0 900 226000010987 A1    2  2720
+06/28/2012 10:09:41.76  00:00:00.20 A 00000 0 900 226000010987 A1    2    35
+06/28/2012 10:09:46.39  00:00:00.00 A 00000 0 900 226000010987 A1    1    21
+06/28/2012 10:09:46.79  00:00:00.00 A 00000 0 900 226000010987 A1    1     1
+06/28/2012 10:09:49.61  00:00:00.21 A 00000 0 900 226000010987 A1    2    13
+06/28/2012 10:09:53.65  00:00:00.20 A 00000 0 900 226000010987 A1    2    18
+06/28/2012 10:10:17.09  00:00:00.81 A 00000 0 900 226000010987 A2    5  2765
+06/28/2012 10:10:21.73  00:00:00.81 A 00000 0 900 226000010987 A2    5    18
+06/28/2012 10:10:25.56  00:00:00.80 A 00000 0 900 226000010987 A2    5    14
+06/28/2012 10:10:28.19  00:00:00.60 A 00000 0 900 226000010987 A2    4     8
+07/02/2012 12:33:45.21 supply power ok 13.5V
+07/02/2012 12:33:45.21 database file opened
+07/02/2012 12:33:45.21 starting reader after power up
+--------- upload 26 done ---------
+
+>

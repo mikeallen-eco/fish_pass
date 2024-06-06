@@ -1,0 +1,47 @@
+up
+Upload #8
+Reader: UPSTREAM 34  Site: Up
+--------- upload 8 start ---------
+E 2019-04-16 14:23:12.31 upload 7 complete
+E 2019-04-23 15:58:56.58 supply power ok 12.8V
+E 2019-04-23 15:58:56.58 database file opened
+E 2019-04-23 15:58:56.58 starting reader after power up
+E 2019-04-23 16:05:05.49 supply power ok 12.8V
+E 2019-04-23 16:05:05.50 database file opened
+E 2019-04-23 16:05:05.50 starting reader after power up
+E 2019-04-23 16:06:54.55 supply power ok 12.8V
+E 2019-04-23 16:06:54.55 database file opened
+E 2019-04-23 16:06:54.55 starting reader after power up
+E 2019-04-23 16:17:44.04 supply power ok 12.8V
+E 2019-04-23 16:17:44.04 database file opened
+E 2019-04-23 16:17:44.04 starting reader after power up
+E 2019-04-23 16:17:56.06 parameter change: mux sequence '34'
+E 2019-04-23 16:18:52.81 supply power ok 12.8V
+E 2019-04-23 16:18:52.81 database file opened
+E 2019-04-23 16:18:52.81 starting reader after power up
+D 2019-04-23 16:19:03.84 00:00:00.61 HA      900_226000791727 A4    4    35
+D 2019-04-23 16:19:40.41 00:00:01.62 HA      900_226000791733 A3    9   218
+E 2019-04-23 16:21:44.37 supply power ok 12.7V
+E 2019-04-23 16:21:44.37 database file opened
+E 2019-04-23 16:21:44.37 starting reader after power up
+D 2019-04-23 16:22:36.07 00:00:00.20 HA      900_226000791733 A3    2   237
+D 2019-04-23 16:22:38.09 00:00:00.40 HA      900_226000791733 A3    3     8
+D 2019-04-23 16:22:41.21 00:00:00.00 HA      900_228000093612 A4    1   263
+D 2019-04-23 16:22:41.61 00:00:00.00 HA      900_228000093612 A4    1     1
+D 2019-04-23 16:22:48.06 00:00:00.20 HA      900_226000791727 A4    2    31
+E 2019-04-23 16:24:43.06 supply power ok 12.7V
+E 2019-04-23 16:24:43.06 database file opened
+E 2019-04-23 16:24:43.06 starting reader after power up
+--------- upload 8 done ---------
+30 records
+
+>
+
+>ad
+                           supply                    supply     clock
+                            amps                      volts     volts
+Rx 0.21 Tx                 A3 0.88 A4 0.89 EA 0.54   12.7 V     3.2 V   16:26:43.98
+Rx 0.21 Tx                 A3 0.87 A4 0.89 EA 0.54   12.7 V     3.2 V   16:26:44.51
+Rx 0.21 Tx                 A3 0.88 A4 0.89 EA 0.54   12.7 V     3.2 V   16:26:45.03
+
+>
