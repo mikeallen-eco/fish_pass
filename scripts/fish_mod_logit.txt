@@ -1,0 +1,25 @@
+
+model{
+for(s in 1:nfishyears){
+  z[s] ~ dbin(ilogit(lp[s]), N[s])
+  lp[s] ~ dnorm(mu_logit_p[c[s]], tau_logit_p[c[s]] )
+  logit(p[s]) <- lp[s]
+}  
+
+for( c in 1:nfish){
+mu_logit_p[c] ~ dnorm(0, 0.001) 
+# note: dunif(-6.9, 10) and dnorm(0,0.111) = similar results, but herring lowerbound = 0.001
+tau_logit_p[c] ~ dgamma(0.001, 0.001)
+logit(mu_p[c]) <- mu_logit_p[c]
+}
+
+fallback_p ~ dunif(0,1) # dbeta(3,3)
+for(i in 1:length(fallback_detect)){
+fallback_detect[i] ~ dbern(fallback_p)
+}
+
+# corrected for imperfect detection in the arrays
+fallback_p_cor <- fallback_p / 0.5
+
+
+}

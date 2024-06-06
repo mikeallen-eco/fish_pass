@@ -1,0 +1,27 @@
+
+model{
+for(s in 1:nfishyears){
+  z.reach[s] ~ dbin(ilogit(lp[s]), N[s])
+  lp[s] ~ dnorm(mu_logit_p[c[s]], tau_logit_p[c[s]] )
+  logit(p[s]) <- lp[s]
+}  
+
+for( c in 1:nfish){
+mu_logit_p[c] ~ dnorm(0, 0.001)
+tau_logit_p[c] ~ dgamma(0.001, 0.001)
+logit(mu_p[c]) <- mu_logit_p[c]
+}
+
+# passage given reached (shad only)
+for(s in c(1:7,16)){
+  z[s] ~ dbin(ilogit(lp2[s]), z.reach[s])
+  lp2[s] ~ dnorm(mu_logit_p2, tau_logit_p2)
+  logit(p2[s]) <- lp2[s]
+}  
+
+mu_logit_p2 ~ dnorm(0, 0.001)
+tau_logit_p2 ~ dgamma(0.001, 0.001)
+logit(mu_p2) <- mu_logit_p2
+
+
+}
